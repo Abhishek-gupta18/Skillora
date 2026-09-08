@@ -1,0 +1,407 @@
+// Skillora — Milestone 1 Schema
+// PostgreSQL + Prisma v7
+// Conventions:
+//   - All timestamps use @default(now()) / @updatedAt
+//   - Money is stored as Int (smallest currency unit, e.g. paise/cents)
+//   - Fields noted "stored encrypted" hold AES-256-GCM ciphertext produced
+//     in the service layer (encoded string containing ciphertext, IV and
+//     auth tag) — never plaintext. Prisma only sees an opaque String.
+//   - passwordHash holds a bcrypt digest (one-way; never AES-encrypted).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum UserRole {
+  CANDIDATE
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum Availability {
+  IMMEDIATE
+  DAYS_15
+  DAYS_30
+  DAYS_60_PLUS
+}
+
+enum LanguageProficiency {
+  BEGINNER
+  CONVERSATIONAL
+  FLUENT
+  NATIVE
+}
+
+enum SocialPlatform {
+  LINKEDIN
+  GITHUB
+  PORTFOLIO
+  OTHER
+}
+
+enum ProfileVisibility {
+  PUBLIC
+  RECRUITERS_ONLY
+  PRIVATE
+}
+
+// ============================================================
+// 1. USER (auth + identity)
+// ============================================================
+
+model User {
+  id                  String     @id @default(cuid())
+  email               String     @unique
+  passwordHash        String // bcrypt digest
+  role                UserRole   @default(CANDIDATE)
+  isEmailVerified     Boolean    @default(false)
+  status              UserStatus @default(ACTIVE)
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+
+  profile             Profile?
+
+  @@index([status])
+}
+
+// ============================================================
+// 2. PROFILE (aggregate root for the 18 sections below)
+// ============================================================
+
+model Profile {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Restrict) // no cascade — deactivation flow handles user removal
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  basicInfo           BasicInfo?
+  photoHeadline       ProfilePhotoHeadline?
+  address             Address?
+  educationEntries    EducationEntry[]
+  experienceEntries   ExperienceEntry[]
+  skillClaims         SkillClaim[]
+  certifications      Certification[]
+  projects            Project[]
+  careerSummary       CareerSummary?
+  preferredRoles      PreferredRole[]
+  preferredLocations  PreferredLocation[]
+  salaryExpectation   SalaryExpectation?
+  availability        AvailabilitySetting?
+  languages           LanguageKnown[]
+  socialLinks         SocialLink[]
+  resume              Resume?
+  references          Reference[]
+  privacyConsent      PrivacyConsent?
+}
+
+// ============================================================
+// PROFILE SECTIONS (all cascade-delete with the Profile)
+// ============================================================
+
+// 1. Basic info
+model BasicInfo {
+  id        String   @id @default(cuid())
+  profileId String   @unique
+  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  name      String
+  dob       DateTime
+  gender    String
+  phone     String // stored encrypted (AES-256-GCM ciphertext string)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// 2. Photo & headline
+model ProfilePhotoHeadline {
+  id        String   @id @default(cuid())
+  profileId String   @unique
+  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  photoUrl  String?
+  headline  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// 3. Address
+model Address {
+  id        String   @id @default(cuid())
+  profileId String   @unique
+  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  line1     String
+  line2     String?
+  city      String
+  state     String
+  country   String
+  pincode   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// 4. Education (one-to-many)
+model EducationEntry {
+  id           String   @id @default(cuid())
+  profileId    String
+  profile      Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  institution  String
+  degree       String
+  fieldOfStudy String
+  startYear    Int
+  endYear      Int?
+  grade        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([profileId])
+}
+
+// 5. Experience (one-to-many)
+model ExperienceEntry {
+  id          String    @id @default(cuid())
+  profileId   String
+  profile     Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  company     String
+  title       String
+  startDate   DateTime
+  endDate     DateTime?
+  isCurrent   Boolean   @default(false)
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([profileId])
+}
+
+// 6. Skill claims (one-to-many, FK to master Skill)
+model SkillClaim {
+  id             String   @id @default(cuid())
+  profileId      String
+  profile        Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  skillId        String
+  skill          Skill    @relation(fields: [skillId], references: [id])
+  selfRatedLevel Int // validated 1..5 at the validation layer
+  verifiedScore  Float?  // null until assessed
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([profileId, skillId]) // a profile claims each skill at most once
+  @@index([skillId])             // reverse lookup: who claims this skill?
+  @@index([profileId])
+}
+
+// 7. Certifications (one-to-many)
+model Certification {
+  id            String    @id @default(cuid())
+  profileId     String
+  profile       Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  name          String
+  issuer        String
+  issueDate     DateTime
+  credentialUrl String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([profileId])
+}
+
+// 8. Projects (one-to-many)
+model Project {
+  id          String   @id @default(cuid())
+  profileId   String
+  profile     Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  title       String
+  description String
+  techStack   String[]
+  link        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([profileId])
+}
+
+// 9. Career summary (1:1, free text; max length enforced at validation layer)
+model CareerSummary {
+  id        String   @id @default(cuid())
+  profileId String   @unique
+  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  text      String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// 10. Preferred roles (one-to-many)
+model PreferredRole {
+  id        String   @id @default(cuid())
+  profileId String
+  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  roleName  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([profileId, roleName]) // prevent duplicates
+  @@index([profileId])
+}
+
+// 11. Preferred locations (one-to-many)
+model PreferredLocation {
+  id           String   @id @default(cuid())
+  profileId    String
+  profile      Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  locationName String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([profileId, locationName]) // prevent duplicates
+  @@index([profileId])
+}
+
+// 12. Salary expectation (amounts in smallest currency unit, e.g. paise/cents)
+model SalaryExpectation {
+  id        String   @id @default(cuid())
+  profileId String   @unique
+  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  minAmount Int
+  maxAmount Int
+  currency  String   @default("INR") // ISO 4217 code
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// 13. Availability (1:1 setting using the Availability enum)
+model AvailabilitySetting {
+  id           String       @id @default(cuid())
+  profileId    String       @unique
+  profile      Profile      @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  availability Availability
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+}
+
+// 14. Languages known (one-to-many)
+model LanguageKnown {
+  id          String              @id @default(cuid())
+  profileId   String
+  profile     Profile             @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  language    String
+  proficiency LanguageProficiency
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@unique([profileId, language]) // prevent duplicates
+  @@index([profileId])
+}
+
+// 15. Social links (one-to-many)
+model SocialLink {
+  id        String         @id @default(cuid())
+  profileId String
+  profile   Profile        @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  platform  SocialPlatform
+  url       String
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@unique([profileId, platform]) // one link per platform
+  @@index([profileId])
+}
+
+// 16. Resume (1:1 — one current resume per profile)
+model Resume {
+  id         String   @id @default(cuid())
+  profileId  String   @unique
+  profile    Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  fileUrl    String
+  fileHash   String // integrity check (e.g. SHA-256 hex)
+  uploadedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+// 17. References (one-to-many)
+model Reference {
+  id          String   @id @default(cuid())
+  profileId   String
+  profile     Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  name        String
+  relation    String
+  contactInfo String // stored encrypted (AES-256-GCM ciphertext string)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([profileId])
+}
+
+// 18. Privacy & consent (1:1)
+model PrivacyConsent {
+  id                  String            @id @default(cuid())
+  profileId           String            @unique
+  profile             Profile           @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileVisibility   ProfileVisibility @default(PRIVATE) // conservative default
+  dataSharingConsent  Boolean           @default(false)
+  consentTimestamp    DateTime?         // set when user actively consents; null at Profile creation
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+}
+
+// ============================================================
+// 3. MASTER SKILL
+// ============================================================
+
+model Skill {
+  id          String       @id @default(cuid())
+  name        String       @unique
+  category    String
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  skillClaims SkillClaim[]
+  assessments Assessment[]
+
+  @@index([category])
+}
+
+// ============================================================
+// STUBS (minimal — full fields arrive in a later milestone)
+// ============================================================
+
+model Company {
+  id          String       @id @default(cuid())
+  name        String
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  jobPostings JobPosting[]
+}
+
+model JobPosting {
+  id        String   @id @default(cuid())
+  title     String
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId])
+}
+
+model Assessment {
+  id        String   @id @default(cuid())
+  skillId   String
+  skill     Skill    @relation(fields: [skillId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([skillId])
+}
