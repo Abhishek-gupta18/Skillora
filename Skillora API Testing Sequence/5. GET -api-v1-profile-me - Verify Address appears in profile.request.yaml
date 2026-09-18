@@ -1,0 +1,19 @@
+$kind: http-request
+name: 5. GET /api/v1/profile/me - Verify Address appears in profile
+url: "{{baseUrl}}/api/v1/profile/me"
+method: GET
+headers:
+  Authorization: Bearer {{authToken}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Address now appears in profile', function () {
+          pm.expect(pm.response.code).to.equal(200);
+          const json = pm.response.json();
+          pm.expect(json.success).to.be.true;
+          pm.expect(json.data.address).to.exist;
+          pm.expect(json.data.address.line1).to.equal('123 Main Street');
+          console.log('Address in profile:', JSON.stringify(json.data.address, null, 2));
+      });
+    language: text/javascript
+order: 5000

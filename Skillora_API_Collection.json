@@ -1,0 +1,429 @@
+{
+	"info": {
+		"_postman_id": "skillora-api-testing",
+		"name": "Skillora API Testing Sequence",
+		"description": "Complete API testing sequence for candidate registration, profile management, and resume upload",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:5000",
+			"type": "string" 
+		},
+		{
+			"key": "authToken",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "candidateEmail",
+			"value": "test.candidate@example.com",
+			"type": "string"
+		},
+		{
+			"key": "candidatePassword",
+			"value": "TestPass123",
+			"type": "string"
+		},
+		{
+			"key": "skillId",
+			"value": "javascript",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "1. POST /api/v1/auth/register - Register new candidate",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"email\": \"{{candidateEmail}}\",\n  \"password\": \"{{candidatePassword}}\",\n  \"name\": \"Test Candidate\",\n  \"phone\": \"+919876543210\",\n  \"dob\": \"2000-01-15\",\n  \"gender\": \"male\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/auth/register",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "v1", "auth", "register"]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "2. POST /api/v1/auth/login - Login with same credentials",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"email\": \"{{candidateEmail}}\",\n  \"password\": \"{{candidatePassword}}\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/auth/login",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "v1", "auth", "login"]
+				}
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Login successful and token received', function () {",
+							"    pm.expect(pm.response.code).to.equal(200);",
+							"    const json = pm.response.json();",
+							"    pm.expect(json.success).to.be.true;",
+							"    pm.expect(json.data.token).to.exist;",
+							"    pm.collectionVariables.set('authToken', json.data.token);",
+							"    console.log('Token saved:', json.data.token);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"response": []
+		},
+		{
+			"name": "3. GET /api/v1/profile/me - Get full profile (BasicInfo + PrivacyConsent pre-filled)",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{authToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/profile/me",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "v1", "profile", "me"]
+				}
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Profile retrieved successfully', function () {",
+							"    pm.expect(pm.response.code).to.equal(200);",
+							"    const json = pm.response.json();",
+							"    pm.expect(json.success).to.be.true;",
+							"    pm.expect(json.data.basicInfo).to.exist;",
+							"    pm.expect(json.data.privacyConsent).to.exist;",
+							"    console.log('BasicInfo:', JSON.stringify(json.data.basicInfo, null, 2));",
+							"    console.log('PrivacyConsent:', JSON.stringify(json.data.privacyConsent, null, 2));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"response": []
+		},
+		{
+			"name": "4. PATCH /api/v1/profile/me/address - Create address section (first time)",
+			"request": {
+				"method": "PATCH",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{authToken}}"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"line1\": \"123 Main Street\",\n  \"line2\": \"Apt 4B\",\n  \"city\": \"Mumbai\",\n  \"state\": \"Maharashtra\",\n  \"country\": \"India\",\n  \"pincode\": \"400001\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/profile/me/address",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "v1", "profile", "me", "address"]
+				}
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Address created successfully', function () {",
+							"    pm.expect(pm.response.code).to.equal(200);",
+							"    const json = pm.response.json();",
+							"    pm.expect(json.success).to.be.true;",
+							"    pm.expect(json.data.line1).to.equal('123 Main Street');",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"response": []
+		},
+		{
+			"name": "5. GET /api/v1/profile/me - Verify Address appears in profile",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{authToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/profile/me",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "v1", "profile", "me"]
+				}
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Address now appears in profile', function () {",
+							"    pm.expect(pm.response.code).to.equal(200);",
+							"    const json = pm.response.json();",
+							"    pm.expect(json.success).to.be.true;",
+							"    pm.expect(json.data.address).to.exist;",
+							"    pm.expect(json.data.address.line1).to.equal('123 Main Street');",
+							"    console.log('Address in profile:', JSON.stringify(json.data.address, null, 2));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"response": []
+		},
+		{
+			"name": "6. POST /api/v1/profile/education - Add education entry",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{authToken}}"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"institution\": \"Indian Institute of Technology\",\n  \"degree\": \"Bachelor of Technology\",\n  \"fieldOfStudy\": \"Computer Science\",\n  \"startYear\": 2018,\n  \"endYear\": 2022,\n  \"grade\": \"8.5 CGPA\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/profile/education",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "v1", "profile", "education"]
+				}
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Education entry created', function () {",
+							"    pm.expect(pm.response.code).to.equal(201);",
+							"    const json = pm.response.json();",
+							"    pm.expect(json.success).to.be.true;",
+							"    pm.expect(json.data.institution).to.equal('Indian Institute of Technology');",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"response": []
+		},
+		{
+			"name": "7. GET /api/v1/profile/skills - Should return empty list (skills seeded but not claimed)",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{authToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/profile/skills",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "v1", "profile", "skills"]
+				}
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Skills list is empty initially', function () {",
+							"    pm.expect(pm.response.code).to.equal(200);",
+							"    const json = pm.response.json();",
+							"    pm.expect(json.success).to.be.true;",
+							"    pm.expect(json.data).to.be.an('array').that.is.empty;",
+							"    console.log('Skills list (should be empty):', JSON.stringify(json.data));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"response": []
+		},
+		{
+			"name": "8. POST /api/v1/profile/skills - Claim a skill using skillId from seed",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{authToken}}"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"skillId\": \"javascript\",\n  \"selfRatedLevel\": 4\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/profile/skills",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "v1", "profile", "skills"]
+				}
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Skill claimed successfully', function () {",
+							"    pm.expect(pm.response.code).to.equal(201);",
+							"    const json = pm.response.json();",
+							"    pm.expect(json.success).to.be.true;",
+							"    pm.expect(json.data.skillId).to.equal('javascript');",
+							"    pm.expect(json.data.selfRatedLevel).to.equal(4);",
+							"    pm.collectionVariables.set('skillId', json.data.id);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"response": []
+		},
+		{
+			"name": "9. POST /api/v1/resume (multipart) - Upload PDF file",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{authToken}}"
+					}
+				],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "resume",
+							"type": "file",
+							"src": "sample-resume.pdf"
+						}
+					]
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/resume",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "v1", "resume"]
+				}
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Resume uploaded successfully', function () {",
+							"    pm.expect(pm.response.code).to.equal(201);",
+							"    const json = pm.response.json();",
+							"    pm.expect(json.success).to.be.true;",
+							"    pm.expect(json.data.id).to.exist;",
+							"    pm.expect(json.data.uploadedAt).to.exist;",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"response": []
+		},
+		{
+			"name": "10. GET /api/v1/resume - Download and verify file",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{authToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/resume",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "v1", "resume"]
+				}
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Resume downloaded successfully', function () {",
+							"    pm.expect(pm.response.code).to.equal(200);",
+							"    pm.expect(pm.response.headers.get('Content-Type')).to.equal('application/pdf');",
+							"    pm.expect(pm.response.headers.get('Content-Disposition')).to.include('attachment');",
+							"    pm.expect(pm.response.headers.get('Content-Length')).to.exist;",
+							"    console.log('File size:', pm.response.headers.get('Content-Length'), 'bytes');",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"response": []
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"exec": [
+					"// Ensure authToken is set for authenticated requests",
+					"if (!pm.collectionVariables.get('authToken') && pm.request.url.path.includes('auth') === false) {",
+					"    console.warn('Warning: authToken not set. Run login request first.');",
+					"}"
+				],
+				"type": "text/javascript"
+			}
+		}
+	]
+}

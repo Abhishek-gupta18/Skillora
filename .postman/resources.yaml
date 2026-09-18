@@ -1,0 +1,13 @@
+# Use this workspace to collaborate
+workspace:
+  id: 4c363226-9ebe-4331-8743-4f083a297f92
+
+localResources:
+  collections:
+    - ../Skillora API Testing Sequence
+
+# Each entry here maps a local resource to one or more corresponding objects in Postman Cloud
+
+cloudResources:
+  collections:
+    ../Skillora API Testing Sequence: skillora-api-testing

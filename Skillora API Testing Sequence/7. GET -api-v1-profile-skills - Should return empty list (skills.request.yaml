@@ -1,0 +1,18 @@
+$kind: http-request
+name: 7. GET /api/v1/profile/skills - Should return empty list (skills seeded but not claimed)
+url: "{{baseUrl}}/api/v1/profile/skills"
+method: GET
+headers:
+  Authorization: Bearer {{authToken}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Skills list is empty initially', function () {
+          pm.expect(pm.response.code).to.equal(200);
+          const json = pm.response.json();
+          pm.expect(json.success).to.be.true;
+          pm.expect(json.data).to.be.an('array').that.is.empty;
+          console.log('Skills list (should be empty):', JSON.stringify(json.data));
+      });
+    language: text/javascript
+order: 7000

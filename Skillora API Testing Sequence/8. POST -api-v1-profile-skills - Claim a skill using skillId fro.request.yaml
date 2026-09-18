@@ -1,0 +1,27 @@
+$kind: http-request
+name: 8. POST /api/v1/profile/skills - Claim a skill using skillId from seed
+url: "{{baseUrl}}/api/v1/profile/skills"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{authToken}}
+body:
+  type: text
+  content: |-
+    {
+      "skillId": "javascript",
+      "selfRatedLevel": 4
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Skill claimed successfully', function () {
+          pm.expect(pm.response.code).to.equal(201);
+          const json = pm.response.json();
+          pm.expect(json.success).to.be.true;
+          pm.expect(json.data.skillId).to.equal('javascript');
+          pm.expect(json.data.selfRatedLevel).to.equal(4);
+          pm.collectionVariables.set('skillId', json.data.id);
+      });
+    language: text/javascript
+order: 8000

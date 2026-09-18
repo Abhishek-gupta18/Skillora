@@ -1,0 +1,29 @@
+$kind: http-request
+name: 6. POST /api/v1/profile/education - Add education entry
+url: "{{baseUrl}}/api/v1/profile/education"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{authToken}}
+body:
+  type: text
+  content: |-
+    {
+      "institution": "Indian Institute of Technology",
+      "degree": "Bachelor of Technology",
+      "fieldOfStudy": "Computer Science",
+      "startYear": 2018,
+      "endYear": 2022,
+      "grade": "8.5 CGPA"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Education entry created', function () {
+          pm.expect(pm.response.code).to.equal(201);
+          const json = pm.response.json();
+          pm.expect(json.success).to.be.true;
+          pm.expect(json.data.institution).to.equal('Indian Institute of Technology');
+      });
+    language: text/javascript
+order: 6000

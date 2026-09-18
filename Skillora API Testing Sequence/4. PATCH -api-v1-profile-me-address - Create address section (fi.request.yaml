@@ -1,0 +1,29 @@
+$kind: http-request
+name: 4. PATCH /api/v1/profile/me/address - Create address section (first time)
+url: "{{baseUrl}}/api/v1/profile/me/address"
+method: PATCH
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{authToken}}
+body:
+  type: text
+  content: |-
+    {
+      "line1": "123 Main Street",
+      "line2": "Apt 4B",
+      "city": "Mumbai",
+      "state": "Maharashtra",
+      "country": "India",
+      "pincode": "400001"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Address created successfully', function () {
+          pm.expect(pm.response.code).to.equal(200);
+          const json = pm.response.json();
+          pm.expect(json.success).to.be.true;
+          pm.expect(json.data.line1).to.equal('123 Main Street');
+      });
+    language: text/javascript
+order: 4000

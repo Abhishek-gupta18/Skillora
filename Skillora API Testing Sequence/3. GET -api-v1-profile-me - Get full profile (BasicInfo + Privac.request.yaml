@@ -1,0 +1,20 @@
+$kind: http-request
+name: 3. GET /api/v1/profile/me - Get full profile (BasicInfo + PrivacyConsent pre-filled)
+url: "{{baseUrl}}/api/v1/profile/me"
+method: GET
+headers:
+  Authorization: Bearer {{authToken}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Profile retrieved successfully', function () {
+          pm.expect(pm.response.code).to.equal(200);
+          const json = pm.response.json();
+          pm.expect(json.success).to.be.true;
+          pm.expect(json.data.basicInfo).to.exist;
+          pm.expect(json.data.privacyConsent).to.exist;
+          console.log('BasicInfo:', JSON.stringify(json.data.basicInfo, null, 2));
+          console.log('PrivacyConsent:', JSON.stringify(json.data.privacyConsent, null, 2));
+      });
+    language: text/javascript
+order: 3000

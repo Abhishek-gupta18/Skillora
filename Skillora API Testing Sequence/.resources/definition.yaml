@@ -1,0 +1,16 @@
+$kind: collection
+description: Complete API testing sequence for candidate registration, profile management, and resume upload
+variables:
+  baseUrl: http://localhost:5000
+  authToken: ""
+  candidateEmail: test.candidate@example.com
+  candidatePassword: TestPass123
+  skillId: javascript
+scripts:
+  - type: http:beforeRequest
+    code: |-
+      // Ensure authToken is set for authenticated requests
+      if (!pm.collectionVariables.get('authToken') && pm.request.url.path.includes('auth') === false) {
+          console.warn('Warning: authToken not set. Run login request first.');
+      }
+    language: text/javascript

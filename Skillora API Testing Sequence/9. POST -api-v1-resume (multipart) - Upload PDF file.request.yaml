@@ -1,0 +1,24 @@
+$kind: http-request
+name: 9. POST /api/v1/resume (multipart) - Upload PDF file
+url: "{{baseUrl}}/api/v1/resume"
+method: POST
+headers:
+  Authorization: Bearer {{authToken}}
+body:
+  type: formdata
+  content:
+    - type: file
+      key: resume
+      src: sample-resume.pdf
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Resume uploaded successfully', function () {
+          pm.expect(pm.response.code).to.equal(201);
+          const json = pm.response.json();
+          pm.expect(json.success).to.be.true;
+          pm.expect(json.data.id).to.exist;
+          pm.expect(json.data.uploadedAt).to.exist;
+      });
+    language: text/javascript
+order: 9000
