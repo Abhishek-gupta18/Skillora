@@ -12,6 +12,7 @@ const authRoutes = require('./routes/authRoutes');
 const profileRoutes = require('./routes/profileRoutes');
 const profileListRoutes = require('./routes/profileListRoutes');
 const resumeRoutes = require('./routes/resumeRoutes');
+const adminRoutes = require('./routes/adminRoutes');
 
 const app = express();
 
@@ -40,6 +41,7 @@ app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/profile', profileRoutes);
 app.use('/api/v1/profile', profileListRoutes);
 app.use('/api/v1/resume', resumeRoutes);
+app.use('/api/v1/admin', adminRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
