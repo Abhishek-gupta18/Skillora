@@ -57,21 +57,41 @@ enum ProfileVisibility {
   PRIVATE
 }
 
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  INTERNSHIP
+  CONTRACT
+}
+
+enum ExperienceLevel {
+  ENTRY
+  MID
+  SENIOR
+  LEAD
+}
+
+enum JobStatus {
+  DRAFT
+  OPEN
+  CLOSED
+}
+
 // ============================================================
 // 1. USER (auth + identity)
 // ============================================================
 
 model User {
-  id                  String     @id @default(cuid())
-  email               String     @unique
-  passwordHash        String // bcrypt digest
-  role                UserRole   @default(CANDIDATE)
-  isEmailVerified     Boolean    @default(false)
-  status              UserStatus @default(ACTIVE)
-  createdAt           DateTime   @default(now())
-  updatedAt           DateTime   @updatedAt
+  id              String     @id @default(cuid())
+  email           String     @unique
+  passwordHash    String // bcrypt digest
+  role            UserRole   @default(CANDIDATE)
+  isEmailVerified Boolean    @default(false)
+  status          UserStatus @default(ACTIVE)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
 
-  profile             Profile?
+  profile Profile?
 
   @@index([status])
 }
@@ -87,24 +107,24 @@ model Profile {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  basicInfo           BasicInfo?
-  photoHeadline       ProfilePhotoHeadline?
-  address             Address?
-  educationEntries    EducationEntry[]
-  experienceEntries   ExperienceEntry[]
-  skillClaims         SkillClaim[]
-  certifications      Certification[]
-  projects            Project[]
-  careerSummary       CareerSummary?
-  preferredRoles      PreferredRole[]
-  preferredLocations  PreferredLocation[]
-  salaryExpectation   SalaryExpectation?
-  availability        AvailabilitySetting?
-  languages           LanguageKnown[]
-  socialLinks         SocialLink[]
-  resume              Resume?
-  references          Reference[]
-  privacyConsent      PrivacyConsent?
+  basicInfo          BasicInfo?
+  photoHeadline      ProfilePhotoHeadline?
+  address            Address?
+  educationEntries   EducationEntry[]
+  experienceEntries  ExperienceEntry[]
+  skillClaims        SkillClaim[]
+  certifications     Certification[]
+  projects           Project[]
+  careerSummary      CareerSummary?
+  preferredRoles     PreferredRole[]
+  preferredLocations PreferredLocation[]
+  salaryExpectation  SalaryExpectation?
+  availability       AvailabilitySetting?
+  languages          LanguageKnown[]
+  socialLinks        SocialLink[]
+  resume             Resume?
+  references         Reference[]
+  privacyConsent     PrivacyConsent?
 }
 
 // ============================================================
@@ -192,26 +212,26 @@ model SkillClaim {
   skillId        String
   skill          Skill    @relation(fields: [skillId], references: [id])
   selfRatedLevel Int // validated 1..5 at the validation layer
-  verifiedScore  Float?  // null until assessed
+  verifiedScore  Float? // null until assessed
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   @@unique([profileId, skillId]) // a profile claims each skill at most once
-  @@index([skillId])             // reverse lookup: who claims this skill?
+  @@index([skillId]) // reverse lookup: who claims this skill?
   @@index([profileId])
 }
 
 // 7. Certifications (one-to-many)
 model Certification {
-  id            String    @id @default(cuid())
+  id            String   @id @default(cuid())
   profileId     String
-  profile       Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profile       Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
   name          String
   issuer        String
   issueDate     DateTime
   credentialUrl String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@index([profileId])
 }
@@ -345,14 +365,14 @@ model Reference {
 
 // 18. Privacy & consent (1:1)
 model PrivacyConsent {
-  id                  String            @id @default(cuid())
-  profileId           String            @unique
-  profile             Profile           @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  profileVisibility   ProfileVisibility @default(PRIVATE) // conservative default
-  dataSharingConsent  Boolean           @default(false)
-  consentTimestamp    DateTime?         // set when user actively consents; null at Profile creation
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime          @updatedAt
+  id                 String            @id @default(cuid())
+  profileId          String            @unique
+  profile            Profile           @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileVisibility  ProfileVisibility @default(PRIVATE) // conservative default
+  dataSharingConsent Boolean           @default(false)
+  consentTimestamp   DateTime? // set when user actively consents; null at Profile creation
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
 }
 
 // ============================================================
@@ -360,14 +380,15 @@ model PrivacyConsent {
 // ============================================================
 
 model Skill {
-  id          String       @id @default(cuid())
-  name        String       @unique
-  category    String
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  id        String   @id @default(cuid())
+  name      String   @unique
+  category  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  skillClaims SkillClaim[]
-  assessments Assessment[]
+  skillClaims     SkillClaim[]
+  assessments     Assessment[]
+  jobRequirements JobRequiredSkill[]
 
   @@index([category])
 }
@@ -377,23 +398,58 @@ model Skill {
 // ============================================================
 
 model Company {
-  id          String       @id @default(cuid())
+  id          String   @id @default(cuid())
   name        String
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  description String?  @db.Text
+  website     String?
+  industry    String?
+  logoUrl     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  jobPostings JobPosting[]
+  jobPostings JobPosting[] @relation("CompanyJobPosting")
 }
 
 model JobPosting {
-  id        String   @id @default(cuid())
-  title     String
-  companyId String
-  company   Company  @relation(fields: [companyId], references: [id])
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id              String          @id @default(cuid())
+  companyId       String
+  title           String
+  company         Company         @relation("CompanyJobPosting", fields: [companyId], references: [id])
+  description     String          @db.Text
+  employmentType  EmploymentType
+  experienceLevel ExperienceLevel
+  location        String
+  isRemote        Boolean         @default(false)
+  salaryMin       Int?
+  salaryMax       Int?
+  currency        String          @default("INR")
+  status          JobStatus       @default(DRAFT)
+  postedAt        DateTime? // set by application logic when status transitions to OPEN; null while still DRAFT
+  closesAt        DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  jobRequiredSkills JobRequiredSkill[]
 
   @@index([companyId])
+  @@index([status])
+}
+
+model JobRequiredSkill {
+  id           String   @id @default(cuid())
+  jobPostingId String
+  skillId      String
+  minimumLevel Int // 1-5 scale, same as SkillClaim.selfRatedLevel, validated at application layer
+  isRequired   Boolean  @default(true) // true = must-have, false = nice-to-have
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  jobPosting JobPosting @relation(fields: [jobPostingId], references: [id])
+  skill      Skill      @relation(fields: [skillId], references: [id])
+
+  @@unique([jobPostingId, skillId]) // a job lists each skill requirement at most once
+  @@index([jobPostingId])
+  @@index([skillId])
 }
 
 model Assessment {
