@@ -12,7 +12,14 @@ const { asyncHandler } = require('../middleware/errorHandler');
  */
 async function createCompany(req, res, next) {
   try {
-    const result = await prisma.company.create(req.body);
+    const { name, description, website, industry, logoUrl } = req.body;
+    const data = {};
+    if (name !== undefined) data.name = name;
+    if (description !== undefined) data.description = description;
+    if (website !== undefined) data.website = website;
+    if (industry !== undefined) data.industry = industry;
+    if (logoUrl !== undefined) data.logoUrl = logoUrl;
+    const result = await prisma.company.create({ data });
     return res.status(201).json({ success: true, data: result });
   } catch (err) {
     next(err);
@@ -62,9 +69,16 @@ async function updateCompany(req, res, next) {
       return res.status(404).json({ success: false, message: 'Company not found' });
     }
 
+    const data = {};
+    if (req.body.name !== undefined) data.name = req.body.name;
+    if (req.body.description !== undefined) data.description = req.body.description;
+    if (req.body.website !== undefined) data.website = req.body.website;
+    if (req.body.industry !== undefined) data.industry = req.body.industry;
+    if (req.body.logoUrl !== undefined) data.logoUrl = req.body.logoUrl;
+
     const result = await prisma.company.update({
       where: { id: req.params.id },
-      data: req.body,
+      data,
     });
     return res.status(200).json({ success: true, data: result });
   } catch (err) {
@@ -93,10 +107,23 @@ async function createJobPosting(req, res, next) {
       return res.status(404).json({ success: false, message: 'Company not found' });
     }
 
-    // status defaults to DRAFT per schema — don't override it here
-    const result = await prisma.jobPosting.create({
-      data: req.body,
-    });
+    // Explicit whitelist — only include intended fields.
+    // status defaults to DRAFT per schema; never accept it from client.
+    // postedAt, id, createdAt, updatedAt are also excluded.
+    const data = {};
+    if (req.body.companyId !== undefined) data.companyId = req.body.companyId;
+    if (req.body.title !== undefined) data.title = req.body.title;
+    if (req.body.description !== undefined) data.description = req.body.description;
+    if (req.body.employmentType !== undefined) data.employmentType = req.body.employmentType;
+    if (req.body.experienceLevel !== undefined) data.experienceLevel = req.body.experienceLevel;
+    if (req.body.location !== undefined) data.location = req.body.location;
+    if (req.body.isRemote !== undefined) data.isRemote = req.body.isRemote;
+    if (req.body.salaryMin !== undefined) data.salaryMin = req.body.salaryMin;
+    if (req.body.salaryMax !== undefined) data.salaryMax = req.body.salaryMax;
+    if (req.body.currency !== undefined) data.currency = req.body.currency;
+    if (req.body.closesAt !== undefined) data.closesAt = req.body.closesAt;
+
+    const result = await prisma.jobPosting.create({ data });
     return res.status(201).json({ success: true, data: result });
   } catch (err) {
     next(err);
@@ -182,9 +209,25 @@ async function updateJobPosting(req, res, next) {
       }
     }
 
+    // Explicit whitelist for update — only these fields may be updated.
+    // status changes must ONLY happen through updateJobStatus.
+    // postedAt, id, createdAt, updatedAt are excluded.
+    const data = {};
+    if (req.body.companyId !== undefined) data.companyId = req.body.companyId;
+    if (req.body.title !== undefined) data.title = req.body.title;
+    if (req.body.description !== undefined) data.description = req.body.description;
+    if (req.body.employmentType !== undefined) data.employmentType = req.body.employmentType;
+    if (req.body.experienceLevel !== undefined) data.experienceLevel = req.body.experienceLevel;
+    if (req.body.location !== undefined) data.location = req.body.location;
+    if (req.body.isRemote !== undefined) data.isRemote = req.body.isRemote;
+    if (req.body.salaryMin !== undefined) data.salaryMin = req.body.salaryMin;
+    if (req.body.salaryMax !== undefined) data.salaryMax = req.body.salaryMax;
+    if (req.body.currency !== undefined) data.currency = req.body.currency;
+    if (req.body.closesAt !== undefined) data.closesAt = req.body.closesAt;
+
     const result = await prisma.jobPosting.update({
       where: { id: req.params.id },
-      data: req.body,
+      data,
     });
     return res.status(200).json({ success: true, data: result });
   } catch (err) {
@@ -257,7 +300,7 @@ async function deleteJobPosting(req, res, next) {
       return res.status(200).json({ success: true, message: 'Job posting deleted' });
     } catch (err) {
       // Foreign-key constraint violation from JobRequiredSkill
-      if (err.code === 'P2034' || err.message?.includes('foreign key constraint')) {
+      if (err.code === 'P2003') {
         return res.status(409).json({
           success: false,
           message: 'Remove required skills from this job before deleting it',
@@ -285,7 +328,7 @@ async function deleteJobPosting(req, res, next) {
 async function addRequiredSkill(req, res, next) {
   try {
     const { jobId } = req.params;
-    const { skillId } = req.body;
+    const { skillId, minimumLevel, isRequired } = req.body;
 
     // verify job posting exists
     const jobPosting = await prisma.jobPosting.findUnique({
@@ -303,14 +346,14 @@ async function addRequiredSkill(req, res, next) {
       return res.status(422).json({ success: false, message: 'Invalid skill' });
     }
 
-    // create the job required skill — Prisma will throw P2002 on duplicate
+    // create the job required skill — use validated input
     try {
       const result = await prisma.jobRequiredSkill.create({
         data: {
           jobPostingId: jobId,
           skillId,
-          minimumLevel: 1, // default, or could be from req.body
-          isRequired: true, // default
+          minimumLevel,
+          isRequired: isRequired ?? true,
         },
       });
       return res.status(201).json({ success: true, data: result });

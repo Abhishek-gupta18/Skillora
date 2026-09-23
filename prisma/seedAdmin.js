@@ -47,14 +47,13 @@ async function main() {
   if (existingUser) {
     if (existingUser.role === 'ADMIN') {
       console.log('Admin already exists, nothing to do');
-      process.exit(0);
+      return; // fall through to outer .then() which disconnects and exits 0
     } else if (existingUser.role === 'CANDIDATE') {
-      console.error(
-        `Error: A candidate account with email "${adminEmail}" already exists. ` +
+      throw new Error(
+        `A candidate account with email "${adminEmail}" already exists. ` +
           'Promoting an existing candidate account to admin should be a ' +
           'deliberate, separate decision, not a side effect of running this script.'
       );
-      process.exit(1);
     }
   }
 
@@ -71,7 +70,7 @@ async function main() {
   });
 
   console.log(`Admin created: ${adminUser.email} with role ADMIN`);
-  process.exit(0);
+  // falls through to outer .then() which disconnects and exits 0
 }
 
 main()
