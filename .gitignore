@@ -3,6 +3,7 @@ node_modules/
 
 # Environment secrets — NEVER commit this file
 .env
+.env.local
 
 # Prisma generated client
 src/generated/prisma/
@@ -21,3 +22,10 @@ Thumbs.db
 # Editor
 .vscode/
 .idea/
+
+# Test coverage
+coverage/
+
+# Build artifacts (if any)
+dist/
+build/

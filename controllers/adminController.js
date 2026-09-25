@@ -121,7 +121,7 @@ async function createJobPosting(req, res, next) {
     if (req.body.salaryMin !== undefined) data.salaryMin = req.body.salaryMin;
     if (req.body.salaryMax !== undefined) data.salaryMax = req.body.salaryMax;
     if (req.body.currency !== undefined) data.currency = req.body.currency;
-    if (req.body.closesAt !== undefined) data.closesAt = req.body.closesAt;
+    if (req.body.closesAt !== undefined) data.closesAt = new Date(req.body.closesAt);
 
     const result = await prisma.jobPosting.create({ data });
     return res.status(201).json({ success: true, data: result });
@@ -209,6 +209,16 @@ async function updateJobPosting(req, res, next) {
       }
     }
 
+    // If companyId is being updated, verify the new company exists
+    if (req.body.companyId !== undefined) {
+      const company = await prisma.company.findUnique({
+        where: { id: req.body.companyId },
+      });
+      if (!company) {
+        return res.status(404).json({ success: false, message: 'Company not found' });
+      }
+    }
+
     // Explicit whitelist for update — only these fields may be updated.
     // status changes must ONLY happen through updateJobStatus.
     // postedAt, id, createdAt, updatedAt are excluded.
@@ -223,7 +233,7 @@ async function updateJobPosting(req, res, next) {
     if (req.body.salaryMin !== undefined) data.salaryMin = req.body.salaryMin;
     if (req.body.salaryMax !== undefined) data.salaryMax = req.body.salaryMax;
     if (req.body.currency !== undefined) data.currency = req.body.currency;
-    if (req.body.closesAt !== undefined) data.closesAt = req.body.closesAt;
+    if (req.body.closesAt !== undefined) data.closesAt = new Date(req.body.closesAt);
 
     const result = await prisma.jobPosting.update({
       where: { id: req.params.id },

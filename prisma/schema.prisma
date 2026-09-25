@@ -77,6 +77,15 @@ enum JobStatus {
   CLOSED
 }
 
+enum ApplicationStatus {
+  APPLIED
+  UNDER_REVIEW
+  SHORTLISTED
+  REJECTED
+  WITHDRAWN
+  HIRED
+}
+
 // ============================================================
 // 1. USER (auth + identity)
 // ============================================================
@@ -125,6 +134,7 @@ model Profile {
   resume             Resume?
   references         Reference[]
   privacyConsent     PrivacyConsent?
+  applications       Application[]
 }
 
 // ============================================================
@@ -430,6 +440,7 @@ model JobPosting {
   updatedAt       DateTime        @updatedAt
 
   jobRequiredSkills JobRequiredSkill[]
+  applications      Application[]
 
   @@index([companyId])
   @@index([status])
@@ -460,4 +471,23 @@ model Assessment {
   updatedAt DateTime @updatedAt
 
   @@index([skillId])
+}
+
+model Application {
+  id              String            @id @default(cuid())
+  profileId       String
+  profile         Profile           @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  jobPostingId    String
+  jobPosting      JobPosting        @relation(fields: [jobPostingId], references: [id], onDelete: Restrict)
+  status          ApplicationStatus @default(APPLIED)
+  coverNote       String?           @db.Text
+  appliedAt       DateTime          @default(now())
+  statusUpdatedAt DateTime          @default(now()) // bumped whenever status changes
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@unique([profileId, jobPostingId]) // a candidate applies to a job at most once
+  @@index([profileId])
+  @@index([jobPostingId])
+  @@index([status])
 }

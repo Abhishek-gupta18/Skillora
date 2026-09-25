@@ -17,6 +17,46 @@ function generateSafeFilename() {
   return `${timestamp}-${randomBytes}.pdf`;
 }
 
+async function streamResumeToResponse(res, profileId) {
+  const resume = await prisma.resume.findUnique({
+    where: { profileId },
+  });
+
+  if (!resume) {
+    return res.status(404).json({
+      success: false,
+      message: 'No resume uploaded',
+    });
+  }
+
+  const filePath = path.join(STORAGE_DIR, resume.fileUrl);
+
+  if (!fs.existsSync(filePath)) {
+    console.error(`Resume DB record exists but file missing on disk: profileId=${profileId}, fileUrl=${resume.fileUrl}`);
+    return res.status(500).json({
+      success: false,
+      message: 'Resume file not found on disk',
+    });
+  }
+
+  const fileBuffer = fs.readFileSync(filePath);
+  const currentHash = hashFileBuffer(fileBuffer);
+
+  if (currentHash !== resume.fileHash) {
+    console.error(`Resume file integrity check failed: profileId=${profileId}`);
+    return res.status(500).json({
+      success: false,
+      message: 'File integrity check failed',
+    });
+  }
+
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="resume.pdf"`);
+  res.setHeader('Content-Length', fileBuffer.length);
+
+  return res.send(fileBuffer);
+}
+
 async function uploadResume(req, res) {
   try {
     if (!req.file) {
@@ -89,45 +129,7 @@ async function uploadResume(req, res) {
 
 async function downloadResume(req, res) {
   try {
-    const profileId = req.profile.id;
-
-    const resume = await prisma.resume.findUnique({
-      where: { profileId },
-    });
-
-    if (!resume) {
-      return res.status(404).json({
-        success: false,
-        message: 'Resume not found',
-      });
-    }
-
-    const filePath = path.join(STORAGE_DIR, resume.fileUrl);
-
-    if (!fs.existsSync(filePath)) {
-      console.error(`Resume DB record exists but file missing on disk: profileId=${profileId}, fileUrl=${resume.fileUrl}`);
-      return res.status(500).json({
-        success: false,
-        message: 'Resume file not found on disk',
-      });
-    }
-
-    const fileBuffer = fs.readFileSync(filePath);
-    const currentHash = hashFileBuffer(fileBuffer);
-
-    if (currentHash !== resume.fileHash) {
-      console.error(`Resume file integrity check failed: profileId=${profileId}`);
-      return res.status(500).json({
-        success: false,
-        message: 'File integrity check failed',
-      });
-    }
-
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="resume.pdf"`);
-    res.setHeader('Content-Length', fileBuffer.length);
-
-    return res.send(fileBuffer);
+    return streamResumeToResponse(res, req.profile.id);
   } catch (error) {
     console.error('Download resume error:', error);
     return res.status(500).json({
@@ -172,4 +174,4 @@ async function deleteResume(req, res) {
   }
 }
 
-module.exports = { uploadResume, downloadResume, deleteResume };
+module.exports = { uploadResume, downloadResume, deleteResume, streamResumeToResponse };
