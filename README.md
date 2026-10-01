@@ -1,8 +1,8 @@
-# Skillora — AI-Powered Career & Skill Intelligence Platform (Backend)
+# Skillora — AI-Powered Career & Skill Intelligence Platform
 
 ## Overview
 
-Skillora is a backend API platform for career and skill intelligence, built with Node.js, Express, and Prisma ORM. It provides authentication, profile management, resume handling, job browsing, eligibility matching, and job application capabilities.
+Skillora is a career and skill intelligence platform. This repository contains the **backend REST API** (Node.js, Express, Prisma ORM) and a **frontend-only React SPA** in [`Frontend/`](./Frontend) that consumes it. The backend provides authentication, profile management, resume handling, job browsing, eligibility matching, and job application capabilities.
 
 ## Tech Stack
 
@@ -23,6 +23,7 @@ skillora/
 │   ├── env.js          # Environment validation
 │   └── prisma.js       # Prisma client with driver adapter
 ├── controllers/        # Request handlers
+│   ├── adminApplicationController.js
 │   ├── adminController.js
 │   ├── applicationController.js
 │   ├── authController.js
@@ -30,19 +31,23 @@ skillora/
 │   ├── jobController.js
 │   ├── profileController.js
 │   ├── profileListController.js
-│   └── resumeController.js
+│   ├── resumeController.js
+│   └── skillController.js
 ├── middleware/
 │   ├── authMiddleware.js
 │   ├── errorHandler.js
 │   ├── profileMiddleware.js
-│   └── rateLimiters.js
+│   ├── rateLimiters.js
+│   ├── roleMiddleware.js
+│   └── uploadMiddleware.js
 ├── routes/             # API route definitions
 │   ├── adminRoutes.js
 │   ├── authRoutes.js
 │   ├── jobRoutes.js
 │   ├── profileRoutes.js
 │   ├── profileListRoutes.js
-│   └── resumeRoutes.js
+│   ├── resumeRoutes.js
+│   └── skillRoutes.js
 ├── services/           # Pure business logic (no I/O)
 │   └── eligibilityService.js
 ├── utils/              # Utility functions
@@ -51,6 +56,7 @@ skillora/
 │   ├── fileValidation.js
 │   └── password.js
 ├── validators/         # Input validation rules
+│   ├── adminApplicationValidators.js
 │   ├── adminValidators.js
 │   ├── applicationValidators.js
 │   ├── authValidators.js
@@ -59,13 +65,14 @@ skillora/
 │   └── profileValidators.js
 ├── prisma/
 │   ├── schema.prisma   # Database schema (490+ lines)
-│   ├── seed.js         # Database seeding
+│   ├── seed.js         # Skill master-data seeding (idempotent)
 │   └── seedAdmin.js    # Admin user seeding
 ├── docs/               # Architecture & decision records
 │   ├── Architecture.md
-│   ├── Constraints.md
+│   ├── constraint.md
 │   ├── Decisions.md
 │   └── flow.md
+├── Frontend/           # React (Vite) SPA — see Frontend/README.md
 └── server.js           # Application entry point
 ```
 
@@ -170,20 +177,30 @@ Server runs on `http://localhost:5000` with health check at `/health`.
 | PATCH | `/api/v1/profile/me/applications/:id/withdraw` | Withdraw an application |
 
 ### Profile Lists (Candidate — requires profile)
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/v1/profile/list` | List profiles with filters |
-| GET | `/api/v1/profile/list/:id` | Get public profile |
-| POST | `/api/v1/profile/list/:id/education` | Add education entry |
-| PATCH | `/api/v1/profile/list/:id/education/:eduId` | Update education entry |
-| DELETE | `/api/v1/profile/list/:id/education/:eduId` | Delete education entry |
-| ... | ... | Similar for experience, skills, certifications, projects, languages, social-links, references |
+Repeatable sections under `/api/v1/profile/<section>` with the same CRUD shape:
 
-### Resume
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/v1/resume/upload` | Upload resume (PDF, encrypted) |
-| GET | `/api/v1/resume` | Get resume metadata |
+| GET | `/api/v1/profile/<section>` | List my entries for that section |
+| POST | `/api/v1/profile/<section>` | Create an entry |
+| PATCH | `/api/v1/profile/<section>/:id` | Update an entry |
+| DELETE | `/api/v1/profile/<section>/:id` | Delete an entry |
+
+`<section>` is one of: `education`, `experience`, `skills` (skill claims),
+`certifications`, `projects`, `preferred-roles`, `preferred-locations`,
+`languages`, `social-links`, `references`.
+
+### Skills (Master Data — authenticated, any role)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/skills` | Master skill list `{id, name, category}`, sorted by category then name — used by the candidate Skills section and admin Required Skills dropdowns |
+
+### Resume (Candidate — requires profile)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/resume` | Upload/replace resume — `multipart/form-data`, file field **must** be named `resume`; PDF only, max 5MB; returns `{id, uploadedAt}` |
+| GET | `/api/v1/resume` | Download resume (PDF stream) |
+| DELETE | `/api/v1/resume` | Delete resume |
 
 ### Job Browsing (Candidate — authenticated, no profile needed)
 | Method | Endpoint | Description |
@@ -208,6 +225,22 @@ Server runs on `http://localhost:5000` with health check at `/health`.
 | DELETE | `/api/v1/admin/jobs/:id` | Delete job (409 if skills attached) |
 | POST | `/api/v1/admin/jobs/:jobId/required-skills` | Add required skill |
 | DELETE | `/api/v1/admin/jobs/:jobId/required-skills/:skillReqId` | Remove required skill |
+| GET | `/api/v1/admin/jobs/:jobId/applications` | List applicants for a job (works for CLOSED jobs too) |
+| PATCH | `/api/v1/admin/applications/:id/status` | Change applicant status (UNDER_REVIEW/SHORTLISTED/REJECTED/HIRED only) |
+| GET | `/api/v1/admin/applications/:id/resume` | Download applicant's resume |
+
+## Frontend
+
+A complete frontend-only React SPA lives in [`Frontend/`](./Frontend) — public
+pages (landing, register, login), the Candidate app (dashboard, 18-section
+profile, job browsing, matches, applications) and a separate Admin console.
+See [`Frontend/README.md`](./Frontend/README.md) for setup and details:
+
+```bash
+cd Frontend
+npm install
+npm run dev   # http://localhost:5173, API base URL via VITE_API_BASE_URL (default http://localhost:5000)
+```
 
 ## Work Done
 
@@ -230,6 +263,13 @@ Server runs on `http://localhost:5000` with health check at `/health`.
 - Job applications (apply, list, withdraw)
 - Duplicate application prevention (DB unique constraint)
 - Terminal status protection (cannot withdraw REJECTED/WITHDRAWN/HIRED)
+
+### ✅ Milestone 3: Frontend & Master Skills
+- Frontend-only React (Vite) SPA in `Frontend/` — public pages, Candidate app, separate Admin console
+- JWT auth with role-based routing (CANDIDATE / ADMIN), 401 session-expiry handling
+- All 18 profile sections with independent saves, client-side validation mirroring backend rules
+- `GET /api/v1/skills` — master skill list endpoint (`skillController.js`, `skillRoutes.js`)
+- Resume upload/download/delete wired to the multipart API (field name `resume`)
 
 ## Scripts
 

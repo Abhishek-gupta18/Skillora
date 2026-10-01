@@ -75,17 +75,17 @@ skillora-backend/
 │   ├── resumeController.js      uploadResume(), downloadResume(), deleteResume()
 │   ├── jobController.js         listOpenJobs(), getOpenJob() — OPEN jobs only, filters + search
 │   ├── eligibilityController.js getJobEligibility(), getJobMatches() — fetches claims/requirements, calls the pure service
-│   ├── applicationController.js applyToJob(), listMyApplications(), withdrawApplication()
-│   ├── adminController.js       company CRUD, job posting CRUD, status transitions (DRAFT→OPEN sets postedAt), required skills
-│   └── adminApplicationController.js listJobApplicants(), updateApplicationStatus(), downloadApplicantResume()
+│   ├── applicationController.js applyToJob(), listMyApplications(), withdrawApplication()│  ├── adminController.js       company CRUD, job posting CRUD, status transitions (DRAFT→OPEN sets postedAt), required skills
+│  ├── adminApplicationController.js listJobApplicants(), updateApplicationStatus(), downloadApplicantResume()
+│  └── skillController.js       listSkills() — master Skill table for dropdowns (auth only, no profile/role needed)
 │
 ├── routes/
 │   ├── authRoutes.js            /api/v1/auth/*
 │   ├── profileRoutes.js         /api/v1/profile/me, /me/<7 sections>, /me/job-matches, /me/applications (+ /withdraw)
 │   ├── profileListRoutes.js     /api/v1/profile/<10 sections> (shares prefix with profileRoutes.js — see flow.md)
-│   ├── resumeRoutes.js          /api/v1/resume
-│   ├── jobRoutes.js             /api/v1/jobs — browsing needs auth only; eligibility + apply additionally run attachProfile, scoped PER-ROUTE
-│   └── adminRoutes.js           /api/v1/admin/* — router.use(authenticate, requireRole(['ADMIN'])) once at the top; all admin routes live in this single file
+│   ├── resumeRoutes.js          /api/v1/resume│  ├── jobRoutes.js             /api/v1/jobs — browsing needs auth only; eligibility + apply additionally run attachProfile, scoped PER-ROUTE
+│  ├── skillRoutes.js           /api/v1/skills — master skill list, authenticate only (used by candidates AND admins)
+│  └── adminRoutes.js           /api/v1/admin/* — router.use(authenticate, requireRole(['ADMIN'])) once at the top; all admin routes live in this single file
 │
 └── (docs)                       Architecture.md, Constraints.md, Decision.md, flow.md — at the repo ROOT, not in docs/
 ```

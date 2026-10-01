@@ -35,14 +35,14 @@ The client appends `/api/v1` to this base URL automatically.
   (`/dashboard`, `/profile`, `/jobs`, `/job-matches`, `/applications`) or the
   separate Admin app (`/admin/companies`, `/admin/jobs`, …).
 
-## Known backend dependency
+## Master skill list
 
-`GET /api/v1/skills` (master skill list) is **not implemented on the backend
-yet**. The UI for skill pickers (Skills section, admin job Required Skills)
-is built assuming it returns:
+`GET /api/v1/skills` (auth required, any role) returns the master skill list
+used by the Skills section and the admin Required Skills pickers:
 
 ```json
 { "success": true, "data": [{ "id": "...", "name": "...", "category": "..." }] }
 ```
 
-Until that endpoint exists, those dropdowns show an explanatory message.
+It is implemented in the backend (`controllers/skillController.js`,
+`routes/skillRoutes.js`, sorted by category then name).
