@@ -14,6 +14,7 @@ const profileListRoutes = require('./routes/profileListRoutes');
 const resumeRoutes = require('./routes/resumeRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const jobRoutes = require('./routes/jobRoutes');
+const skillRoutes = require('./routes/skillRoutes');
 
 const app = express();
 
@@ -44,6 +45,7 @@ app.use('/api/v1/profile', profileListRoutes);
 app.use('/api/v1/resume', resumeRoutes);
 app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/jobs', jobRoutes);
+app.use('/api/v1/skills', skillRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
