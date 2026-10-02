@@ -322,3 +322,120 @@ Response: statusCode (err.statusCode || 500)
 | `/api/v1/jobs/:id/apply` | authenticate → attachProfile → validation |
 | `/api/v1/profile/*` | authenticate → attachProfile → validation |
 | `/api/v1/admin/*` | authenticate → requireRole(['ADMIN']) → validation |
+| `/api/v1/interview-experiences` (GET) | authenticate → validation |
+| `/api/v1/interview-experiences/:id` (GET) | authenticate |
+| `/api/v1/interview-experiences` (POST) | authenticate → attachProfile → validation |
+| `/api/v1/interview-experiences/:id` (DELETE) | authenticate → attachProfile |
+| `/api/v1/admin/interview-experiences/:id` (DELETE) | authenticate → requireRole(['ADMIN']) |
+
+---
+
+## 10. Interview Experience Flow
+
+### List Interview Experiences
+```
+GET /api/v1/interview-experiences?companyName=&roleTitle=&outcome=
+    │
+    ▼
+interviewExperienceRoutes.js
+    │
+    ├── authenticate
+    ├── listInterviewExperiencesValidation (query validators)
+    │       └── handleValidationErrors
+    │
+    ▼
+interviewExperienceController.listInterviewExperiences
+    │
+    ├── matchedData(req) → { companyName, roleTitle, outcome }
+    ├── Build WHERE from filters (partial match on companyName/roleTitle, exact on outcome)
+    ├── Prisma: InterviewExperience.findMany(where, include: { rounds: true }, orderBy: createdAt desc)
+    ├── Strip author-identifying info (NEVER include profile relation)
+    │
+    ▼
+Response: 200 { success, data: InterviewExperience[] }
+```
+
+### Get Single Interview Experience
+```
+GET /api/v1/interview-experiences/:id
+    │
+    ▼
+interviewExperienceController.getInterviewExperience
+    │
+    ├── Prisma: InterviewExperience.findUnique({ where: { id }, include: { rounds: true } })
+    ├── If null → 404
+    ├── Strip author-identifying info (NEVER include profile relation)
+    │
+    ▼
+Response: 200 { success, data: InterviewExperience }
+```
+
+### Create Interview Experience
+```
+POST /api/v1/interview-experiences
+    │
+    ▼
+interviewExperienceRoutes.js
+    │
+    ├── authenticate
+    ├── attachProfile (req.profile.id used as authorProfileId)
+    ├── createInterviewExperienceValidation (body validators)
+    │       └── handleValidationErrors
+    │
+    ▼
+interviewExperienceController.createInterviewExperience
+    │
+    ├── If companyId provided: Prisma: Company.findUnique → 404 if not found
+    ├── If jobPostingId provided: Prisma: JobPosting.findUnique (NO status filter) → 404 if not found
+    ├── Prisma: InterviewExperience.create({
+          data: {
+            authorProfileId: req.profile.id,  // NEVER from body
+            companyName, companyId, roleTitle, jobPostingId, outcome,
+            interviewDate, isAnonymous, narrative,
+            rounds: { create: req.body.rounds.map(r => ({ roundOrder, roundType, questionsAsked, notes })) }
+          },
+          include: { rounds: true }
+        })
+    │
+    ▼
+Response: 201 { success, data: InterviewExperienceWithRounds }
+```
+
+### Delete Own Interview Experience
+```
+DELETE /api/v1/interview-experiences/:id
+    │
+    ▼
+interviewExperienceRoutes.js
+    │
+    ├── authenticate
+    ├── attachProfile
+    │
+    ▼
+interviewExperienceController.deleteOwnInterviewExperience
+    │
+    ├── Prisma: InterviewExperience.findFirst({ where: { id: req.params.id, authorProfileId: req.profile.id } })
+    ├── If null → 404 (identical for not-found / not-owner)
+    ├── Prisma: InterviewExperience.delete({ where: { id } })  // rounds cascade-delete
+    │
+    ▼
+Response: 200 { success: true, message: 'Deleted' }
+```
+
+### Admin Delete Interview Experience (Moderation)
+```
+DELETE /api/v1/admin/interview-experiences/:id
+    │
+    ▼
+adminRoutes.js (already authenticate → requireRole(['ADMIN']))
+    │
+    ▼
+adminInterviewExperienceController.adminDeleteInterviewExperience
+    │
+    ├── Prisma: InterviewExperience.findUnique({ where: { id } })  // NO ownership scoping
+    ├── If null → 404
+    ├── Prisma: InterviewExperience.delete({ where: { id } })  // rounds cascade-delete
+    │
+    ▼
+Response: 200 { success: true, message: 'Deleted' }
+```

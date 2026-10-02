@@ -15,6 +15,7 @@ const {
   addRequiredSkill,
   removeRequiredSkill,
 } = require('../controllers/adminController');
+const { adminDeleteInterviewExperience } = require('../controllers/adminInterviewExperienceController');
 const {
   listJobApplicants,
   updateApplicationStatus,
@@ -74,5 +75,10 @@ router.delete('/jobs/:jobId/required-skills/:skillReqId', removeRequiredSkill);
 router.get('/jobs/:jobId/applications', listJobApplicants);
 router.patch('/applications/:id/status', updateApplicationStatusValidation, handleValidationErrors, updateApplicationStatus);
 router.get('/applications/:id/resume', downloadApplicantResume);
+
+/* ==========================================
+ * Interview Experience Moderation
+ * ========================================== */
+router.delete('/interview-experiences/:id', adminDeleteInterviewExperience);
 
 module.exports = router;

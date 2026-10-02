@@ -86,6 +86,23 @@ enum ApplicationStatus {
   HIRED
 }
 
+enum InterviewOutcome {
+  SELECTED
+  REJECTED
+  PENDING
+  WITHDREW
+}
+
+enum InterviewRoundType {
+  ONLINE_ASSESSMENT
+  TECHNICAL
+  HR
+  MANAGERIAL
+  SYSTEM_DESIGN
+  GROUP_DISCUSSION
+  OTHER
+}
+
 // ============================================================
 // 1. USER (auth + identity)
 // ============================================================
@@ -135,6 +152,7 @@ model Profile {
   references         Reference[]
   privacyConsent     PrivacyConsent?
   applications       Application[]
+  interviewExperiences InterviewExperience[]
 }
 
 // ============================================================
@@ -408,39 +426,41 @@ model Skill {
 // ============================================================
 
 model Company {
-  id          String   @id @default(cuid())
-  name        String
-  description String?  @db.Text
-  website     String?
-  industry    String?
-  logoUrl     String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                    String               @id @default(cuid())
+  name                  String
+  description           String?              @db.Text
+  website               String?
+  industry              String?
+  logoUrl               String?
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
 
-  jobPostings JobPosting[] @relation("CompanyJobPosting")
+  jobPostings           JobPosting[]         @relation("CompanyJobPosting")
+  interviewExperiences  InterviewExperience[]
 }
 
 model JobPosting {
-  id              String          @id @default(cuid())
-  companyId       String
-  title           String
-  company         Company         @relation("CompanyJobPosting", fields: [companyId], references: [id])
-  description     String          @db.Text
-  employmentType  EmploymentType
-  experienceLevel ExperienceLevel
-  location        String
-  isRemote        Boolean         @default(false)
-  salaryMin       Int?
-  salaryMax       Int?
-  currency        String          @default("INR")
-  status          JobStatus       @default(DRAFT)
-  postedAt        DateTime? // set by application logic when status transitions to OPEN; null while still DRAFT
-  closesAt        DateTime?
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  id                    String               @id @default(cuid())
+  companyId             String
+  title                 String
+  company               Company              @relation("CompanyJobPosting", fields: [companyId], references: [id])
+  description           String               @db.Text
+  employmentType        EmploymentType
+  experienceLevel       ExperienceLevel
+  location              String
+  isRemote              Boolean              @default(false)
+  salaryMin             Int?
+  salaryMax             Int?
+  currency              String               @default("INR")
+  status                JobStatus            @default(DRAFT)
+  postedAt              DateTime? // set by application logic when status transitions to OPEN; null while still DRAFT
+  closesAt              DateTime?
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
 
-  jobRequiredSkills JobRequiredSkill[]
-  applications      Application[]
+  jobRequiredSkills     JobRequiredSkill[]
+  applications          Application[]
+  interviewExperiences  InterviewExperience[]
 
   @@index([companyId])
   @@index([status])
@@ -490,4 +510,43 @@ model Application {
   @@index([profileId])
   @@index([jobPostingId])
   @@index([status])
+}
+
+model InterviewExperience {
+  id              String            @id @default(cuid())
+  authorProfileId String
+  authorProfile   Profile           @relation(fields: [authorProfileId], references: [id], onDelete: Cascade)
+  companyName     String            // free text — always required, even if companyId is also set
+  companyId       String?           // optional link if it matches an existing Company
+  company         Company?          @relation(fields: [companyId], references: [id], onDelete: SetNull) // SetNull: post survives Company deletion; user-generated content preserved vs. JobRequiredSkill uses Restrict to protect operational referential integrity
+  roleTitle       String            // free text — always required
+  jobPostingId    String?           // optional link if it matches an existing JobPosting
+  jobPosting      JobPosting?       @relation(fields: [jobPostingId], references: [id], onDelete: SetNull) // SetNull: post survives JobPosting deletion; user-generated content preserved vs. JobRequiredSkill uses Restrict to protect operational referential integrity
+  outcome         InterviewOutcome
+  interviewDate   DateTime?
+  isAnonymous     Boolean           @default(false)
+  narrative       String?           @db.Text
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  rounds InterviewRound[]
+
+  @@index([authorProfileId])
+  @@index([companyId])
+  @@index([jobPostingId])
+  @@index([outcome])
+}
+
+model InterviewRound {
+  id                    String              @id @default(cuid())
+  interviewExperienceId String
+  interviewExperience   InterviewExperience @relation(fields: [interviewExperienceId], references: [id], onDelete: Cascade)
+  roundOrder            Int                 // 1, 2, 3... the sequence of this round
+  roundType             InterviewRoundType
+  questionsAsked        String[]            // array of question strings
+  notes                 String?             @db.Text
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  @@index([interviewExperienceId])
 }

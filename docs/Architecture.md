@@ -108,7 +108,8 @@
 | Job Browsing | jobRoutes.js | jobController.js | — | jobValidators.js |
 | Eligibility | jobRoutes.js + profileRoutes.js | eligibilityController.js | eligibilityService.js | jobValidators.js |
 | Applications | jobRoutes.js + profileRoutes.js | applicationController.js | — | applicationValidators.js |
-| Admin | adminRoutes.js | adminController.js | — | adminValidators.js |
+| Interview Experiences | interviewExperienceRoutes.js | interviewExperienceController.js | — | interviewExperienceValidators.js |
+| Admin | adminRoutes.js | adminController.js, adminApplicationController.js, adminInterviewExperienceController.js | — | adminValidators.js, adminApplicationValidators.js |
 
 ## Future Extensibility
 - Assessment Engine: will add AssessmentService + assessment routes

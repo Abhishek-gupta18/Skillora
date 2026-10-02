@@ -186,3 +186,93 @@ prisma.application.findFirst({
 **Rationale:** Uniform cleanup. Prisma disconnect happens exactly once via the promise chain, whether success or failure.
 
 **Reference:** `prisma/seedAdmin.js`, `prisma/seed.js` (same pattern)
+
+---
+
+## 2026-10-02: Interview Experience Feature — User-Generated Content with Optional Platform Links
+
+**Decision:** InterviewExperience model links to Company and JobPosting via optional `companyId` and `jobPostingId` fields with `onDelete: SetNull`. Free-text `companyName` and `roleTitle` are always required.
+
+**Rationale:** Candidates share experiences from companies/roles that may not exist on the platform. If an admin later deletes a Company or JobPosting, the interview experience post must survive (it's the candidate's own content/history) but lose its link to the deleted record, falling back to just the free-text fields. This differs from JobRequiredSkill/Application which use `onDelete: Restrict` to protect referential integrity of operational records.
+
+**Pattern:**
+```prisma
+companyId  String?  // optional link
+company    Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+// SetNull: post survives Company deletion; user-generated content preserved vs. JobRequiredSkill uses Restrict to protect operational referential integrity
+```
+
+**Applied in:** `prisma/schema.prisma` (InterviewExperience model), `controllers/interviewExperienceController.js` (create verifies existence if provided but doesn't require it)
+
+**Reference:** `controllers/interviewExperienceController.js:createInterviewExperience`, `prisma/schema.prisma`
+
+---
+
+## 2026-10-02: Interview Experience Board — Author Identity Never Exposed in List/View
+
+**Decision:** Both list (`listInterviewExperiences`) and single-item (`getInterviewExperience`) endpoints NEVER include author-identifying information (name, email, profile link) in responses, regardless of `isAnonymous` flag. This is stronger than just respecting `isAnonymous` — it applies unconditionally to keep the board's framing consistent with GFG/LeetCode Discuss where authorship isn't the point.
+
+**Rationale:** Interview experience boards are about the content (company, role, rounds, questions, outcome), not the author. Exposing author identity changes the social dynamics and discourages candid sharing.
+
+**Pattern:**
+```js
+// List endpoint
+const experiences = await prisma.interviewExperience.findMany({
+  where,
+  include: { rounds: true },  // NO profile include
+  orderBy: { createdAt: 'desc' },
+});
+
+// Single-item endpoint
+const experience = await prisma.interviewExperience.findUnique({
+  where: { id: req.params.id },
+  include: { rounds: true },  // NO profile include
+});
+```
+
+**Applied in:** `controllers/interviewExperienceController.js` (listInterviewExperiences, getInterviewExperience)
+
+**Reference:** `controllers/interviewExperienceController.js`
+
+---
+
+## 2026-10-02: Interview Experience Create — Nested Write for Rounds
+
+**Decision:** `createInterviewExperience` uses Prisma's nested write to create the InterviewExperience and its InterviewRound children in a single transaction.
+
+**Rationale:** Atomic creation ensures rounds are never orphaned. Controller maps `req.body.rounds` directly to Prisma's `create` nested write.
+
+**Pattern:**
+```js
+await prisma.interviewExperience.create({
+  data: {
+    authorProfileId: req.profile.id,
+    // ...otherFields,
+    rounds: {
+      create: req.body.rounds.map(r => ({
+        roundOrder: r.roundOrder,
+        roundType: r.roundType,
+        questionsAsked: r.questionsAsked,
+        notes: r.notes || null,
+      })),
+    },
+  },
+  include: { rounds: true },
+});
+```
+
+**Applied in:** `controllers/interviewExperienceController.js:createInterviewExperience`
+
+**Reference:** `controllers/interviewExperienceController.js`
+
+---
+
+## 2026-10-02: Interview Experience Delete-Own — Combined Ownership Query
+
+**Decision:** `deleteOwnInterviewExperience` uses `findFirst({ where: { id, authorProfileId } })` for ownership check — identical 404 whether missing or belongs to another user.
+
+**Rationale:** Consistent with established pattern across all list-section controllers (applications, profile lists, admin required skills). No information leakage about existence of others' content.
+
+**Applied in:** `controllers/interviewExperienceController.js:deleteOwnInterviewExperience`
+
+**Reference:** `controllers/interviewExperienceController.js`, `docs/Decisions.md#2026-09-25: Single Combined Query for Ownership Checks`
