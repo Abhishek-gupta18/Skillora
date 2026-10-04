@@ -16,6 +16,7 @@ const adminRoutes = require('./routes/adminRoutes');
 const jobRoutes = require('./routes/jobRoutes');
 const skillRoutes = require('./routes/skillRoutes');
 const interviewExperienceRoutes = require('./routes/interviewExperienceRoutes');
+const assessmentRoutes = require('./routes/assessmentRoutes');
 
 const app = express();
 
@@ -48,6 +49,7 @@ app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/jobs', jobRoutes);
 app.use('/api/v1/skills', skillRoutes);
 app.use('/api/v1/interview-experiences', interviewExperienceRoutes);
+app.use('/api/v1/assessments', assessmentRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

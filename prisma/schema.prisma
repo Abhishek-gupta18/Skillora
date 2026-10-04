@@ -381,7 +381,10 @@ model CodingSubmission {
   codingQuestionId String
   submittedCode    String
   languageId       Int
-  judge0Token      String?
+  // One Judge0 submission token per TestCase, in the same order as the
+  // test cases were submitted (visible cases first, then hidden) — used
+  // to poll batch results.
+  judge0Tokens     String[]
   status           SubmissionStatus  @default(PENDING)
   testCasesPassed  Int               @default(0)
   testCasesTotal   Int               @default(0)
@@ -390,6 +393,7 @@ model CodingSubmission {
   codingQuestion   CodingQuestion    @relation(fields: [codingQuestionId], references: [id])
   session          AssessmentSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
+  @@unique([sessionId, codingQuestionId])
   @@index([sessionId])
   @@index([codingQuestionId])
 }
