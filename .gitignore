@@ -11,7 +11,7 @@ src/generated/prisma/
 prisma/migrations/
 
 # Uploaded resume files (local storage, never in git)
-storage/
+resume-storage/
 
 # Logs
 *.log
