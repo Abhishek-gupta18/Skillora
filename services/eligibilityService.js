@@ -52,4 +52,23 @@ function calculateEligibility(candidateSkillClaims, jobRequiredSkills) {
   };
 }
 
-module.exports = { calculateEligibility };
+function rankJobMatches(candidateSkillClaims, jobs) {
+  const results = jobs.map(job => {
+    const { eligibilityScore, isEligible } = calculateEligibility(
+      candidateSkillClaims,
+      job.jobRequiredSkills
+    );
+    return {
+      jobId: job.id,
+      title: job.title,
+      companyName: job.company.name,
+      eligibilityScore,
+      isEligible,
+    };
+  });
+
+  results.sort((a, b) => b.eligibilityScore - a.eligibilityScore);
+  return results;
+}
+
+module.exports = { calculateEligibility, rankJobMatches };

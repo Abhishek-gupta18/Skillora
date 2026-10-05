@@ -20,6 +20,7 @@ const {
   upsertSalaryExpectation,
   upsertAvailability,
   upsertPrivacyConsent,
+  getDashboard,
 } = require('../controllers/profileController');
 const { getJobMatches } = require('../controllers/eligibilityController');
 const { listMyApplications, withdrawApplication } = require('../controllers/applicationController');
@@ -30,6 +31,7 @@ router.use(authenticate);
 router.use(attachProfile);
 
 router.get('/me', getFullProfile);
+router.get('/me/dashboard', getDashboard);
 router.get('/me/job-matches', getJobMatches);
 router.get('/me/applications', listMyApplications);
 router.patch('/me/applications/:id/withdraw', withdrawApplication);

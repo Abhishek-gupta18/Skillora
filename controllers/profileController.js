@@ -1,6 +1,8 @@
 const { prisma } = require('../config/prisma');
 const { encrypt, decrypt } = require('../utils/encryption');
 const { asyncHandler } = require('../middleware/errorHandler');
+const { calculateProfileCompletion } = require('../services/profileCompletionService');
+const { rankJobMatches } = require('../services/eligibilityService');
 
 const getFullProfile = asyncHandler(async (req, res) => {
   const profile = await prisma.profile.findUnique({
@@ -270,6 +272,103 @@ const upsertPrivacyConsent = asyncHandler(async (req, res) => {
   return res.status(200).json({ success: true, data: upserted });
 });
 
+const getDashboard = asyncHandler(async (req, res) => {
+  const profile = await prisma.profile.findUnique({
+    where: { id: req.profile.id },
+    include: {
+      basicInfo: true,
+      photoHeadline: true,
+      address: true,
+      educationEntries: true,
+      experienceEntries: true,
+      skillClaims: { include: { skill: true } },
+      certifications: true,
+      projects: true,
+      careerSummary: true,
+      preferredRoles: true,
+      preferredLocations: true,
+      salaryExpectation: true,
+      availability: true,
+      languages: true,
+      socialLinks: true,
+      resume: true,
+      references: true,
+      privacyConsent: true,
+    },
+  });
+
+  const profileCompletion = calculateProfileCompletion(profile);
+
+  const [recentApplications, totalApplications] = await Promise.all([
+    prisma.application.findMany({
+      where: { profileId: req.profile.id },
+      select: {
+        id: true,
+        status: true,
+        appliedAt: true,
+        jobPosting: { select: { title: true, company: { select: { name: true } } } },
+      },
+      orderBy: { appliedAt: 'desc' },
+      take: 5,
+    }),
+    prisma.application.count({ where: { profileId: req.profile.id } }),
+  ]);
+
+  const pendingSkillClaims = await prisma.skillClaim.findMany({
+    where: { profileId: req.profile.id, verifiedScore: null },
+    select: { skillId: true, skill: { select: { name: true } }, selfRatedLevel: true },
+  });
+
+  const activeSessions = await prisma.assessmentSession.findMany({
+    where: {
+      profileId: req.profile.id,
+      status: 'IN_PROGRESS',
+      expiresAt: { gt: new Date() },
+    },
+    select: { id: true, skillId: true },
+  });
+
+  const activeSessionMap = new Map();
+  for (const session of activeSessions) {
+    activeSessionMap.set(session.skillId, session.id);
+  }
+
+  const pendingTests = pendingSkillClaims.map(claim => ({
+    skillId: claim.skillId,
+    skillName: claim.skill.name,
+    selfRatedLevel: claim.selfRatedLevel,
+    hasActiveSession: activeSessionMap.has(claim.skillId),
+    activeSessionId: activeSessionMap.get(claim.skillId) || null,
+  }));
+
+  const [jobs, candidateSkillClaims] = await Promise.all([
+    prisma.jobPosting.findMany({
+      where: { status: 'OPEN' },
+      include: {
+        company: { select: { name: true } },
+        jobRequiredSkills: { include: { skill: true } },
+      },
+    }),
+    prisma.skillClaim.findMany({
+      where: { profileId: req.profile.id },
+      select: { skillId: true, selfRatedLevel: true, verifiedScore: true },
+    }),
+  ]);
+
+  const allJobMatches = rankJobMatches(candidateSkillClaims, jobs);
+  const topJobMatches = allJobMatches.slice(0, 5);
+
+  return res.status(200).json({
+    success: true,
+    data: {
+      profileCompletion,
+      applications: { total: totalApplications, recent: recentApplications },
+      pendingTests,
+      topJobMatches,
+    },
+  });
+});
+
 module.exports = {
   getFullProfile,
   upsertBasicInfo,
@@ -279,4 +378,5 @@ module.exports = {
   upsertSalaryExpectation,
   upsertAvailability,
   upsertPrivacyConsent,
+  getDashboard,
 };
