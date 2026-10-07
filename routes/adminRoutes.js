@@ -22,6 +22,16 @@ const {
   downloadApplicantResume,
 } = require('../controllers/adminApplicationController');
 const {
+  createRoadmapTemplate,
+  listRoadmapTemplates,
+  getRoadmapTemplate,
+  updateRoadmapTemplate,
+  deleteRoadmapTemplate,
+  addRoadmapStep,
+  updateRoadmapStep,
+  removeRoadmapStep,
+} = require('../controllers/adminRoadmapController');
+const {
   createCompanyValidation,
   updateCompanyValidation,
   createJobPostingValidation,
@@ -30,6 +40,12 @@ const {
   addRequiredSkillValidation,
   handleValidationErrors,
 } = require('../validators/adminValidators');
+const {
+  createRoadmapTemplateValidation,
+  updateRoadmapTemplateValidation,
+  createRoadmapStepValidation,
+  updateRoadmapStepValidation,
+} = require('../validators/adminRoadmapValidators');
 const { updateApplicationStatusValidation } = require('../validators/adminApplicationValidators');
 
 const router = express.Router();
@@ -80,5 +96,21 @@ router.get('/applications/:id/resume', downloadApplicantResume);
  * Interview Experience Moderation
  * ========================================== */
 router.delete('/interview-experiences/:id', adminDeleteInterviewExperience);
+
+/* ==========================================
+ * Roadmap Template routes
+ * ========================================== */
+router.post('/roadmap-templates', createRoadmapTemplateValidation, handleValidationErrors, createRoadmapTemplate);
+router.get('/roadmap-templates', listRoadmapTemplates);
+router.get('/roadmap-templates/:id', getRoadmapTemplate);
+router.patch('/roadmap-templates/:id', updateRoadmapTemplateValidation, handleValidationErrors, updateRoadmapTemplate);
+router.delete('/roadmap-templates/:id', deleteRoadmapTemplate);
+
+/* ==========================================
+ * Roadmap Step routes
+ * ========================================== */
+router.post('/roadmap-templates/:templateId/steps', createRoadmapStepValidation, handleValidationErrors, addRoadmapStep);
+router.patch('/roadmap-templates/:templateId/steps/:id', updateRoadmapStepValidation, handleValidationErrors, updateRoadmapStep);
+router.delete('/roadmap-templates/:templateId/steps/:id', removeRoadmapStep);
 
 module.exports = router;

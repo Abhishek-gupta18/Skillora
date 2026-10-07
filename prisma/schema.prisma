@@ -47,6 +47,7 @@ model Profile {
   salaryExpectation    SalaryExpectation?
   skillClaims          SkillClaim[]
   socialLinks          SocialLink[]
+  roadmapAssignments   RoadmapAssignment[]
 
   @@index([userId])
 }
@@ -288,8 +289,80 @@ model Skill {
   jobRequirements    JobRequiredSkill[]
   questions          Question[]
   skillClaims        SkillClaim[]
+  roadmapTemplates   RoadmapTemplate[]
 
   @@index([category])
+}
+
+model RoadmapTemplate {
+  id           String          @id @default(cuid())
+  skillId      String
+  targetLevel  Int
+  title        String
+  description  String?         @db.Text
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  skill        Skill           @relation(fields: [skillId], references: [id])
+  steps        RoadmapStep[]
+  assignments  RoadmapAssignment[]
+
+  @@unique([skillId, targetLevel])
+  @@index([skillId])
+}
+
+model RoadmapStep {
+  id                  String            @id @default(cuid())
+  roadmapTemplateId   String
+  stepOrder           Int
+  type                RoadmapStepType
+  title               String
+  description         String?           @db.Text
+  resourceUrl         String?
+  resourceType        ResourceType?
+  // V1: self-reported completion only, not linked to the Question
+  // bank or auto-graded — a future enhancement could validate this
+  // against real practice attempts
+  practiceQuestionCount Int?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  roadmapTemplate     RoadmapTemplate   @relation(fields: [roadmapTemplateId], references: [id], onDelete: Cascade)
+  progressRecords     RoadmapStepProgress[]
+
+  @@index([roadmapTemplateId])
+  @@unique([roadmapTemplateId, stepOrder])
+}
+
+model RoadmapAssignment {
+  id                  String                  @id @default(cuid())
+  profileId           String
+  roadmapTemplateId   String
+  status              RoadmapAssignmentStatus @default(ACTIVE)
+  startedAt           DateTime                @default(now())
+  completedAt         DateTime?
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+  profile             Profile                 @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  roadmapTemplate     RoadmapTemplate         @relation(fields: [roadmapTemplateId], references: [id], onDelete: Restrict)
+  stepProgress        RoadmapStepProgress[]
+
+  @@unique([profileId, roadmapTemplateId])
+  @@index([profileId])
+  @@index([roadmapTemplateId])
+}
+
+model RoadmapStepProgress {
+  id                   String       @id @default(cuid())
+  roadmapAssignmentId  String
+  roadmapStepId        String
+  isCompleted          Boolean      @default(false)
+  completedAt          DateTime?
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+  roadmapAssignment    RoadmapAssignment @relation(fields: [roadmapAssignmentId], references: [id], onDelete: Cascade)
+  roadmapStep          RoadmapStep  @relation(fields: [roadmapStepId], references: [id], onDelete: Restrict)
+
+  @@unique([roadmapAssignmentId, roadmapStepId])
+  @@index([roadmapAssignmentId])
 }
 
 model Question {
@@ -611,4 +684,23 @@ enum SubmissionStatus {
   PROCESSING
   COMPLETED
   ERROR
+}
+
+enum RoadmapStepType {
+  STUDY
+  PRACTICE_CHECKPOINT
+}
+
+enum ResourceType {
+  VIDEO
+  ARTICLE
+  COURSE
+  DOCUMENTATION
+  OTHER
+}
+
+enum RoadmapAssignmentStatus {
+  ACTIVE
+  COMPLETED
+  ABANDONED
 }
