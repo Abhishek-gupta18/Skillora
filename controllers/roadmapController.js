@@ -263,7 +263,26 @@ async function updateStepProgress(req, res, next) {
     return res.status(404).json({ success: false, message: 'Step not found' });
   }
 
-  const completedAt = isCompleted ? new Date() : null;
+  const existingProgress = await prisma.roadmapStepProgress.findUnique({
+    where: {
+      roadmapAssignmentId_roadmapStepId: {
+        roadmapAssignmentId: assignmentId,
+        roadmapStepId: stepId,
+      },
+    },
+  });
+
+  const wasCompleted = existingProgress?.isCompleted === true;
+  const willBeCompleted = isCompleted === true;
+
+  let completedAt;
+  if (willBeCompleted && !wasCompleted) {
+    completedAt = new Date();
+  } else if (!willBeCompleted) {
+    completedAt = null;
+  } else {
+    completedAt = existingProgress.completedAt;
+  }
 
   await prisma.roadmapStepProgress.upsert({
     where: {
@@ -293,12 +312,12 @@ async function updateStepProgress(req, res, next) {
   let completedAtAssignment = assignment.completedAt;
 
   const allStepsComplete = c >= t && t > 0;
-  const wasCompleted = assignment.status === 'COMPLETED';
+  const assignmentWasCompleted = assignment.status === 'COMPLETED';
 
-  if (allStepsComplete && !wasCompleted) {
+  if (allStepsComplete && !assignmentWasCompleted) {
     newStatus = 'COMPLETED';
     completedAtAssignment = new Date();
-  } else if (wasCompleted && !allStepsComplete) {
+  } else if (assignmentWasCompleted && !allStepsComplete) {
     newStatus = 'ACTIVE';
     completedAtAssignment = null;
   }

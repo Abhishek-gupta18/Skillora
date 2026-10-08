@@ -29,6 +29,6 @@
     "multer": "^2.0.0"
   },
   "devDependencies": {
-    "prisma": "^8.0.0-rc.20"
+    "prisma": "7.10.0"
   }
 }
