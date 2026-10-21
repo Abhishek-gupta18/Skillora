@@ -10,6 +10,7 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "prisma:seed": "node prisma/seed.js",
+    "prisma:seed:questions": "node prisma/seedQuestions.js",
     "seed:admin": "node prisma/seedAdmin.js"
   },
   "keywords": [],

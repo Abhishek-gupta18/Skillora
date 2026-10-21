@@ -134,35 +134,6 @@ const defaultFeatures: FeatureItem[] = [
         metric: "Pipeline visibility",
     },
 ]
-const defaultJobs: JobItem[] = [
-    {
-        title: "Backend Engineer",
-        company: "Razorpay",
-        location: "Bengaluru",
-        experience: "1–3 years",
-        score: "91%",
-        status: "ELIGIBLE",
-        gap: "",
-    },
-    {
-        title: "Software Engineer",
-        company: "Postman",
-        location: "Bengaluru",
-        experience: "0–2 years",
-        score: "76%",
-        status: "PARTIALLY ELIGIBLE",
-        gap: "System Design",
-    },
-    {
-        title: "Full Stack Developer",
-        company: "Linear",
-        location: "Remote",
-        experience: "1–3 years",
-        score: "62%",
-        status: "SKILL GAP",
-        gap: "React + Testing",
-    },
-]
 const defaultCommunity: CommunityItem[] = [
     {
         company: "Amazon",
@@ -426,6 +397,7 @@ export default function ProventaLanding(props: MyComponentProps) {
     const [menuOpen, setMenuOpen] = useState(false)
     const [navbarActivated, setNavbarActivated] = useState(false)
     const [introCommitted, setIntroCommitted] = useState(false)
+    const [introCollapsed, setIntroCollapsed] = useState(false)
     const [logoReady, setLogoReady] = useState(false)
     const [dialogText, setDialogText] = useState("")
     const [lastFocus, setLastFocus] = useState<HTMLElement | null>(null)
@@ -437,6 +409,8 @@ export default function ProventaLanding(props: MyComponentProps) {
     const navbarActivatedRef = useRef(false)
     const logoArrivedRef = useRef(false)
     const introCommittedRef = useRef(false)
+    const transitionRunningRef = useRef(false)
+    const transitionOverflowRef = useRef<string | null>(null)
     const refreshPositionResetRef = useRef(false)
 
     const theme = useMemo<ThemeTokens>(
@@ -570,25 +544,15 @@ export default function ProventaLanding(props: MyComponentProps) {
                 window.scrollTo(0, 0)
             }
         }
-        const transitionDistance = 300
+        const scrollThreshold = 28
         let frame = 0
-        let commitTimer = 0
+        let introCollapseStarted = false
         let anchor = { x: 24, y: 32, scale: 0.36 }
         const measureAnchor = () => {
             const rect = navbarBrandRef.current?.getBoundingClientRect()
             if (rect) anchor = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, scale: rect.width / Math.min(330, window.innerWidth - 32) }
         }
-        const paint = () => {
-            frame = 0
-            let raw = introCommittedRef.current || logoArrivedRef.current
-                ? 1
-                : !logoReady
-                  ? 0
-                  : reducedMotion
-                  ? window.scrollY >= transitionDistance * 0.88 ? 1 : 0
-                  : Math.min(1, Math.max(0, window.scrollY / transitionDistance))
-            if (raw >= 1) logoArrivedRef.current = true
-            const progress = raw * raw * (3 - 2 * raw)
+        const paintLogo = (progress: number) => {
             const logo = flyingLogoRef.current
             if (logo) {
                 const dx = (anchor.x - window.innerWidth / 2) * progress
@@ -598,32 +562,61 @@ export default function ProventaLanding(props: MyComponentProps) {
                 logo.style.opacity = progress > 0.995 ? "0" : "1"
             }
             if (navbarBrandRef.current) navbarBrandRef.current.style.opacity = progress > 0.995 ? "1" : "0"
-            if (logoReady && window.scrollY >= transitionDistance * 0.88 && !navbarActivatedRef.current) {
-                navbarActivatedRef.current = true
-                setNavbarActivated(true)
-            }
-            if (raw >= 1 && navbarActivatedRef.current && !introCommittedRef.current && !commitTimer) {
-                commitTimer = window.setTimeout(() => {
-                    introCommittedRef.current = true
-                    window.scrollTo(0, 0)
-                    setIntroCommitted(true)
-                }, reducedMotion ? 0 : 560)
-            }
         }
-        const schedulePaint = () => {
-            if (!frame) frame = window.requestAnimationFrame(paint)
+        const startTransition = () => {
+            if (!logoReady || transitionRunningRef.current || introCommittedRef.current) return
+            transitionRunningRef.current = true
+            const previousOverflow = document.documentElement.style.overflow
+            transitionOverflowRef.current = previousOverflow
+            document.documentElement.style.overflow = "hidden"
+            window.scrollTo(0, 0)
+            const startedAt = performance.now()
+            const logoDuration = reducedMotion ? 0 : 1000
+            const navbarRevealAt = reducedMotion ? 0 : 680
+            const collapseAt = reducedMotion ? 0 : 1150
+            const completeAt = reducedMotion ? 0 : 1620
+            const step = (now: number) => {
+                const elapsed = now - startedAt
+                const raw = logoDuration ? Math.min(1, elapsed / logoDuration) : 1
+                const progress = raw * raw * (3 - 2 * raw)
+                paintLogo(progress)
+                if (elapsed >= navbarRevealAt && !navbarActivatedRef.current) {
+                    navbarActivatedRef.current = true
+                    setNavbarActivated(true)
+                }
+                if (elapsed >= collapseAt && !introCollapseStarted) {
+                    introCollapseStarted = true
+                    setIntroCollapsed(true)
+                }
+                if (elapsed < completeAt) {
+                    frame = window.requestAnimationFrame(step)
+                    return
+                }
+                logoArrivedRef.current = true
+                introCommittedRef.current = true
+                setIntroCommitted(true)
+                document.documentElement.style.overflow = previousOverflow
+                transitionOverflowRef.current = null
+            }
+            frame = window.requestAnimationFrame(step)
         }
-        const onScroll = schedulePaint
-        const onResize = () => { measureAnchor(); schedulePaint() }
+        const onScroll = () => {
+            if (window.scrollY >= scrollThreshold) startTransition()
+        }
+        const onResize = () => { measureAnchor(); if (!transitionRunningRef.current) paintLogo(0) }
         measureAnchor()
-        paint()
+        paintLogo(0)
         window.addEventListener("scroll", onScroll, { passive: true })
         window.addEventListener("resize", onResize)
+        if (window.scrollY >= scrollThreshold) startTransition()
         return () => {
             window.removeEventListener("scroll", onScroll)
             window.removeEventListener("resize", onResize)
             if (frame) window.cancelAnimationFrame(frame)
-            if (commitTimer) window.clearTimeout(commitTimer)
+            if (transitionOverflowRef.current !== null) {
+                document.documentElement.style.overflow = transitionOverflowRef.current
+                transitionOverflowRef.current = null
+            }
         }
     }, [logoReady, reducedMotion])
     useEffect(() => {
@@ -778,7 +771,7 @@ export default function ProventaLanding(props: MyComponentProps) {
                     description={description}
                     auth={auth}
                     scrollToSection={scrollToSection}
-                    introCommitted={introCommitted}
+                    introCollapsed={introCollapsed}
                 />
             <StatsStrip shared={shared} stats={stats} />
             <ProblemSection shared={shared} />
@@ -1105,14 +1098,14 @@ function Hero({
     description,
     auth,
     scrollToSection,
-    introCommitted,
+    introCollapsed,
 }: {
     shared: SharedCtx
     heading: string
     description: string
     auth: (k: "signup" | "signin") => void
     scrollToSection: (id: string) => void
-    introCommitted: boolean
+    introCollapsed: boolean
 }) {
     const highlighted = heading.includes("Where You Stand.")
     return (
@@ -1121,7 +1114,7 @@ function Hero({
             style={{
                 ...shared.sectionWrap,
                 position: "relative",
-                paddingTop: introCommitted ? 56 : "calc(100vh + 48px)",
+                paddingTop: introCollapsed ? 56 : "calc(100vh + 48px)",
                 paddingBottom: 100,
                 scrollMarginTop: 80,
                 transition: shared.reducedMotion ? "none" : "padding-top 460ms cubic-bezier(.2,.7,.2,1)",
