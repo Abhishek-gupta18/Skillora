@@ -14,6 +14,19 @@ const {
   deleteJobPosting,
   addRequiredSkill,
   removeRequiredSkill,
+  listRetakeRequests,
+  updateRetakeRequest,
+  listUsers,
+  updateUserStatus,
+  createSkill,
+  listSkillsAdmin,
+  updateSkill,
+  listQuestions,
+  createQuestion,
+  updateQuestion,
+  updateQuestionActive,
+  createQuestionsBulk,
+  getQuestionsCoverage,
 } = require('../controllers/adminController');
 const { adminDeleteInterviewExperience } = require('../controllers/adminInterviewExperienceController');
 const {
@@ -47,6 +60,13 @@ const {
   updateRoadmapStepValidation,
 } = require('../validators/adminRoadmapValidators');
 const { updateApplicationStatusValidation } = require('../validators/adminApplicationValidators');
+const {
+  retakeRequestListQueryValidation,
+  updateRetakeRequestValidation,
+} = require('../validators/retakeRequestValidators');
+const { userListQueryValidation, userStatusUpdateValidation } = require('../validators/adminValidators');
+const { skillCreateValidation, skillUpdateValidation, skillListQueryValidation } = require('../validators/adminSkillValidators');
+const { questionListQueryValidation, questionCreateValidation, questionUpdateValidation, questionActiveValidation, questionBulkValidation, questionCoverageValidation } = require('../validators/adminQuestionValidators');
 
 const router = express.Router();
 
@@ -112,5 +132,34 @@ router.delete('/roadmap-templates/:id', deleteRoadmapTemplate);
 router.post('/roadmap-templates/:templateId/steps', createRoadmapStepValidation, handleValidationErrors, addRoadmapStep);
 router.patch('/roadmap-templates/:templateId/steps/:id', updateRoadmapStepValidation, handleValidationErrors, updateRoadmapStep);
 router.delete('/roadmap-templates/:templateId/steps/:id', removeRoadmapStep);
+
+/* ==========================================
+ * RetakeRequest routes (Admin)
+ * ========================================== */
+router.get('/retake-requests', retakeRequestListQueryValidation, handleValidationErrors, listRetakeRequests);
+router.patch('/retake-requests/:id', updateRetakeRequestValidation, handleValidationErrors, updateRetakeRequest);
+
+/* ==========================================
+ * User Management routes (Admin)
+ * ========================================== */
+router.get('/users', userListQueryValidation, handleValidationErrors, listUsers);
+router.patch('/users/:id/status', userStatusUpdateValidation, handleValidationErrors, updateUserStatus);
+
+/* ==========================================
+ * Skill Management routes (Admin)
+ * ========================================== */
+router.post('/skills', skillCreateValidation, handleValidationErrors, createSkill);
+router.get('/skills', skillListQueryValidation, handleValidationErrors, listSkillsAdmin);
+router.patch('/skills/:id', skillUpdateValidation, handleValidationErrors, updateSkill);
+
+/* ==========================================
+ * Question Management routes (Admin)
+ * ========================================== */
+router.get('/questions', questionListQueryValidation, handleValidationErrors, listQuestions);
+router.post('/questions', questionCreateValidation, handleValidationErrors, createQuestion);
+router.patch('/questions/:id', questionUpdateValidation, handleValidationErrors, updateQuestion);
+router.patch('/questions/:id/active', questionActiveValidation, handleValidationErrors, updateQuestionActive);
+router.post('/questions/bulk', questionBulkValidation, handleValidationErrors, createQuestionsBulk);
+router.get('/questions/coverage', getQuestionsCoverage);
 
 module.exports = router;

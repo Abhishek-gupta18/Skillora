@@ -10,6 +10,7 @@ const { asyncHandler } = require('../middleware/errorHandler');
 async function listSkills(req, res, next) {
   try {
     const skills = await prisma.skill.findMany({
+      where: { isActive: true },
       select: { id: true, name: true, category: true },
       orderBy: [{ category: 'asc' }, { name: 'asc' }],
     });

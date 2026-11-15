@@ -48,6 +48,7 @@ model Profile {
   skillClaims          SkillClaim[]
   socialLinks          SocialLink[]
   roadmapAssignments   RoadmapAssignment[]
+  retakeRequests       RetakeRequest[]
 
   @@index([userId])
 }
@@ -126,6 +127,8 @@ model SkillClaim {
   skillId        String
   selfRatedLevel Int
   verifiedScore  Float?
+  verifiedLevel  Int?
+  verifiedAt     DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   profile        Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
@@ -282,6 +285,7 @@ model Skill {
   id                 String              @id @default(cuid())
   name               String              @unique
   category           String
+  isActive           Boolean             @default(true)
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
   assessmentSessions AssessmentSession[]
@@ -290,8 +294,10 @@ model Skill {
   questions          Question[]
   skillClaims        SkillClaim[]
   roadmapTemplates   RoadmapTemplate[]
+  retakeRequests     RetakeRequest[]
 
   @@index([category])
+  @@index([isActive])
 }
 
 model RoadmapTemplate {
@@ -366,19 +372,22 @@ model RoadmapStepProgress {
 }
 
 model Question {
-  id                 String             @id @default(cuid())
+  id                 String                     @id @default(cuid())
   skillId            String
   promptText         String
   options            String[]
   correctOptionIndex Int
   difficulty         QuestionDifficulty
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
+  isActive           Boolean                    @default(true)
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
   answers            AssessmentAnswer[]
-  skill              Skill              @relation(fields: [skillId], references: [id])
+  sessionQuestions   AssessmentSessionQuestion[]
+  skill              Skill                      @relation(fields: [skillId], references: [id])
 
   @@index([skillId])
   @@index([difficulty])
+  @@index([skillId, difficulty, isActive])
 }
 
 model CodingQuestion {
@@ -411,23 +420,25 @@ model TestCase {
 }
 
 model AssessmentSession {
-  id                   String             @id @default(cuid())
+  id                   String                     @id @default(cuid())
   profileId            String
   skillId              String
   targetLevel          Int
   passThresholdPercent Int
-  status               SessionStatus      @default(IN_PROGRESS)
-  startedAt            DateTime           @default(now())
+  status               SessionStatus              @default(IN_PROGRESS)
+  startedAt            DateTime                   @default(now())
   expiresAt            DateTime
   completedAt          DateTime?
   score                Float?
   passed               Boolean?
-  createdAt            DateTime           @default(now())
-  updatedAt            DateTime           @updatedAt
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
   answers              AssessmentAnswer[]
-  profile              Profile            @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  skill                Skill              @relation(fields: [skillId], references: [id])
+  sessionQuestions     AssessmentSessionQuestion[]
+  profile              Profile                    @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  skill                Skill                      @relation(fields: [skillId], references: [id])
   submissions          CodingSubmission[]
+  retakeRequests       RetakeRequest[]
 
   @@index([profileId])
   @@index([skillId])
@@ -446,6 +457,44 @@ model AssessmentAnswer {
 
   @@unique([sessionId, questionId])
   @@index([sessionId])
+}
+
+model AssessmentSessionQuestion {
+  id        String             @id @default(cuid())
+  sessionId String
+  questionId String
+  position  Int
+  createdAt DateTime           @default(now())
+  session   AssessmentSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  question  Question           @relation(fields: [questionId], references: [id])
+
+  @@unique([sessionId, questionId])
+  @@unique([sessionId, position])
+  @@index([sessionId])
+}
+
+model RetakeRequest {
+  id             String             @id @default(cuid())
+  profileId      String
+  skillId        String
+  sessionId      String
+  targetLevel    Int
+  reasonType     RetakeReasonType
+  reason         String             @db.VarChar(1000)
+  evidenceNote   String?            @db.VarChar(1000)
+  status         RetakeRequestStatus @default(PENDING)
+  reviewedByUserId String?
+  reviewNote     String?            @db.VarChar(1000)
+  reviewedAt     DateTime?
+  consumedAt     DateTime?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  profile        Profile            @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  skill          Skill              @relation(fields: [skillId], references: [id])
+  session        AssessmentSession  @relation(fields: [sessionId], references: [id])
+
+  @@index([profileId, skillId])
+  @@index([status])
 }
 
 model CodingSubmission {
@@ -697,6 +746,17 @@ enum ResourceType {
   COURSE
   DOCUMENTATION
   OTHER
+}
+
+enum RetakeReasonType {
+  SYSTEM_FAILURE
+  OTHER_VALID_REASON
+}
+
+enum RetakeRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 enum RoadmapAssignmentStatus {

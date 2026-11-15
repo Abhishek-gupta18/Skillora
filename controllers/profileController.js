@@ -316,8 +316,21 @@ const getDashboard = asyncHandler(async (req, res) => {
 
   const pendingSkillClaims = await prisma.skillClaim.findMany({
     where: { profileId: req.profile.id, verifiedScore: null },
-    select: { skillId: true, skill: { select: { name: true } }, selfRatedLevel: true },
+    select: { skillId: true, skill: { select: { name: true } }, selfRatedLevel: true, verifiedLevel: true },
   });
+
+  const allSkillClaims = await prisma.skillClaim.findMany({
+    where: { profileId: req.profile.id },
+    select: { skillId: true, skill: { select: { name: true } }, selfRatedLevel: true, verifiedLevel: true, verifiedScore: true },
+  });
+
+  const skillClaimsWithState = allSkillClaims.map(claim => ({
+    skillId: claim.skillId,
+    skillName: claim.skill.name,
+    selfRatedLevel: claim.selfRatedLevel,
+    verifiedLevel: claim.verifiedLevel,
+    state: claim.verifiedLevel !== null ? 'verified' : 'claimed',
+  }));
 
   const activeSessions = await prisma.assessmentSession.findMany({
     where: {
@@ -337,23 +350,20 @@ const getDashboard = asyncHandler(async (req, res) => {
     skillId: claim.skillId,
     skillName: claim.skill.name,
     selfRatedLevel: claim.selfRatedLevel,
+    verifiedLevel: claim.verifiedLevel,
     hasActiveSession: activeSessionMap.has(claim.skillId),
     activeSessionId: activeSessionMap.get(claim.skillId) || null,
   }));
 
-  const [jobs, candidateSkillClaims] = await Promise.all([
-    prisma.jobPosting.findMany({
-      where: { status: 'OPEN' },
-      include: {
-        company: { select: { name: true } },
-        jobRequiredSkills: { include: { skill: true } },
-      },
-    }),
-    prisma.skillClaim.findMany({
-      where: { profileId: req.profile.id },
-      select: { skillId: true, selfRatedLevel: true, verifiedScore: true },
-    }),
-  ]);
+  const candidateSkillClaims = allSkillClaims;
+
+  const jobs = await prisma.jobPosting.findMany({
+    where: { status: 'OPEN' },
+    include: {
+      company: { select: { name: true } },
+      jobRequiredSkills: { include: { skill: true } },
+    },
+  });
 
   const allJobMatches = rankJobMatches(candidateSkillClaims, jobs);
   const topJobMatches = allJobMatches.slice(0, 5);
@@ -364,6 +374,7 @@ const getDashboard = asyncHandler(async (req, res) => {
       profileCompletion,
       applications: { total: totalApplications, recent: recentApplications },
       pendingTests,
+      skillClaims: skillClaimsWithState,
       topJobMatches,
     },
   });

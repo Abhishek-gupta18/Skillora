@@ -57,7 +57,7 @@ async function requestRoadmap(req, res, next) {
       return res.status(409).json({
         success: false,
         message: 'You are already following this roadmap',
-        assignmentId: existingAssignment.id,
+        data: { assignmentId: existingAssignment.id },
       });
     }
     if (existingAssignment.status === 'COMPLETED') {
@@ -73,8 +73,10 @@ async function requestRoadmap(req, res, next) {
       });
       return res.status(200).json({
         success: true,
-        assignmentId: reactivated.id,
-        reactivated: true,
+        data: {
+          assignmentId: reactivated.id,
+          reactivated: true,
+        },
       });
     }
   }
@@ -101,10 +103,12 @@ async function requestRoadmap(req, res, next) {
 
     return res.status(201).json({
       success: true,
-      assignmentId: assignment.id,
-      templateId: template.id,
-      title: template.title,
-      totalSteps: template.steps.length,
+      data: {
+        assignmentId: assignment.id,
+        templateId: template.id,
+        title: template.title,
+        totalSteps: template.steps.length,
+      },
     });
   } catch (err) {
     if (err.code === 'P2002') {
@@ -221,13 +225,15 @@ async function getMyRoadmap(req, res, next) {
 
   return res.status(200).json({
     success: true,
-    assignmentId: assignment.id,
-    title: assignment.roadmapTemplate.title,
-    skillName: assignment.roadmapTemplate.skill.name,
-    targetLevel: assignment.roadmapTemplate.targetLevel,
-    status: assignment.status,
-    progress: { totalSteps: t, completedCount: c, progressPercent },
-    steps,
+    data: {
+      assignmentId: assignment.id,
+      title: assignment.roadmapTemplate.title,
+      skillName: assignment.roadmapTemplate.skill.name,
+      targetLevel: assignment.roadmapTemplate.targetLevel,
+      status: assignment.status,
+      progress: { totalSteps: t, completedCount: c, progressPercent },
+      steps,
+    },
   });
 }
 
@@ -331,10 +337,12 @@ async function updateStepProgress(req, res, next) {
 
   return res.status(200).json({
     success: true,
-    stepId,
-    isCompleted,
-    assignmentStatus: newStatus,
-    progress: { totalSteps: t, completedCount: c, progressPercent },
+    data: {
+      stepId,
+      isCompleted,
+      assignmentStatus: newStatus,
+      progress: { totalSteps: t, completedCount: c, progressPercent },
+    },
   });
 }
 
@@ -362,7 +370,7 @@ async function abandonRoadmap(req, res, next) {
     data: { status: 'ABANDONED' },
   });
 
-  return res.status(200).json({ success: true, assignmentId, status: 'ABANDONED' });
+  return res.status(200).json({ success: true, data: { assignmentId, status: 'ABANDONED' } });
 }
 
 module.exports = {

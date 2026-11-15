@@ -53,6 +53,8 @@ there is one source of truth.
 - **NEVER** return `passwordHash` or the raw ciphertext of an encrypted field
   in any API response. Encrypted fields are decrypted for their owner or
   omitted.
+- **NEVER** omit `status` and `tokenVersion` check in `authenticate`. Every request MUST validate `status === 'ACTIVE'` (403 otherwise) and `tokenVersion === token.tv` (401 otherwise).
+- **NEVER** skip incrementing `tokenVersion` on password change, logout-all, or admin suspend. Token revocation relies on this field.
 
 ---
 
@@ -176,6 +178,49 @@ there is one source of truth.
   file; do not copy that pattern elsewhere.
 - Only one `IN_PROGRESS` session per `(profileId, skillId)` is intended; it
   is enforced in application logic only (known race, see Decision.md).
+- **submitAnswer MUST validate binding via AssessmentSessionQuestion** — the
+  question must exist in `AssessmentSessionQuestion` for the given
+  `(sessionId, questionId)`; `skillId` comparison alone is insufficient.
+- **Score denominator is the bound-question count** (rows in
+  `AssessmentSessionQuestion` for the session). Unanswered bound questions
+  count as wrong. Never use answered-count as denominator.
+- **Never revert a completed session** — `completeSession` uses atomic
+  `updateMany` with `status: 'IN_PROGRESS'` and `expiresAt: { gt: now }`
+  guard; a second completion returns 409. The `verifiedScore` write on pass
+  is best-effort (silent catch preserved); on fail it is never written.
+- **Questions are bound at session start** — `startSession` samples exactly
+  `ASSESSMENT_QUESTION_COUNT` questions and creates `AssessmentSessionQuestion`
+  rows in a single transaction. If fewer questions are available, returns 422
+  and creates NOTHING.
+- **Answers are editable until completion** — `submitAnswer` uses upsert on
+  `AssessmentAnswer`; correctness is never revealed before `completeSession`.
+- **Retake gate** — `startSession` checks for prior COMPLETED sessions at the same
+  `targetLevel` (derived from `SkillClaim.selfRatedLevel`). If any exist, an
+  APPROVED, unconsumed `RetakeRequest` for `(profileId, skillId, targetLevel)`
+  is REQUIRED; otherwise returns 403. The request is consumed atomically inside
+  the session-creation transaction. Level upgrades (higher `targetLevel` than
+  any prior COMPLETED session) are allowed without a retake request.
+- **RetakeRequest ownership** — candidate endpoints use combined
+  `findFirst({ id, profileId })` for session lookup; generic 404 for missing
+  or not-owned. Admin list never exposes PII beyond existing admin endpoints.
+- **One PENDING request per (profileId, skillId)** — candidate `POST
+  /retake-requests` returns 409 if a PENDING request already exists.
+- **Admin review** — only PENDING requests may be reviewed (409 otherwise);
+  `reviewedByUserId` and `reviewedAt` stamped from `req.user.id` and `now()`.
+- **Rate limiting** — candidate `POST /retake-requests` has a dedicated limiter
+  (5 requests/hour).
+- **Verified-only eligibility** — `calculateEligibility` uses ONLY `verifiedLevel`
+  (null when unverified). `selfRatedLevel` is NEVER used for eligibility.
+  Matched = `verifiedLevel !== null && verifiedLevel >= minimumLevel`.
+- **VerifiedLevel written only in completeSession on pass** — `completeSession`
+  updates `verifiedLevel = session.targetLevel` and `verifiedAt = now()` when
+  `passed === true`. Never lowers an existing `verifiedLevel`; if the new passed
+  level is lower, the higher level is kept. Never writes on fail.
+- **Verified fields never client-settable** — `verifiedScore`, `verifiedLevel`,
+  `verifiedAt` are NEVER accepted from the client in any create/update endpoint.
+  Validators whitelist only `skillId` and `selfRatedLevel` for SkillClaim.
+- **Dashboard state** — `getDashboard` returns per-claim `state: 'claimed'` when
+  `verifiedLevel` is null, `'verified'` when not null.
 
 ---
 
@@ -262,3 +307,26 @@ there is one source of truth.
   exception.
 - If you are unsure whether something falls under one of these rules, treat
   it as if it does and ask before proceeding.
+
+---
+
+## 13. Assessment Questions (Admin)
+
+- **NEVER** allow modification of `skillId`, `difficulty`, `promptText`, `options`, or `correctOptionIndex` on a `Question` that is bound to any `AssessmentSessionQuestion` (409 with message to deactivate + create new). `isActive` toggle is allowed.
+- **NEVER** delete a `Question` (no DELETE route). Use `isActive: false` to deactivate.
+- **NEVER** skip correct-answer-text assertion in bulk insert. `utils/questionBulk.prepareBulkQuestions` MUST assert per-item that the correct option TEXT is unchanged after balancing and no option is undefined/null/empty.
+- **NEVER** use a loop for bulk question insert. Use `tx.question.createMany` inside a single transaction with timeout.
+
+## 14. Admin Endpoints (PII)
+
+- **NEVER** return `phone`, `dob`, or any encrypted field in admin user list (`GET /admin/users`). Only `id`, `email`, `role`, `status`, `createdAt`, `name` (from basicInfo).
+- **NEVER** return `passwordHash` in any admin response.
+
+## 15. Admin Skills/Questions (Active Filters)
+
+- **NEVER** return inactive skills in public `GET /api/v1/skills` list (filter `isActive: true`).
+- **NEVER** sample inactive questions in `startSession` (query must include `AND "isActive" = true`).
+- **NEVER** allow `updateQuestion` to change `skillId`, `difficulty`, `promptText`, `options`, or `correctOptionIndex` on a bound question (409).
+- **NEVER** allow `updateQuestion` to provide `options` without `correctOptionIndex` if existing `correctOptionIndex` would be out of bounds (422).
+- **NEVER** skip correct-answer-text preservation in `utils/questionBulk.prepareBulkQuestions` — throw if violated.
+- **NEVER** skip empty-option check in `prepareBulkQuestions` — throw if any option is undefined/null/empty.

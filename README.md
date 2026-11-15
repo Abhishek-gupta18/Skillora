@@ -130,6 +130,8 @@ Required variables:
 Optional:
 - `RESUME_STORAGE_DIR` — resume file storage (default `./resume-storage`)
 - `ADMIN_EMAIL` / `ADMIN_PASSWORD` — for `prisma/seedAdmin.js`
+- `JWT_EXPIRES_IN` — JWT expiry (e.g. `7d`, `1h`, `30m`). Default: `7d`.
+- `TRUST_PROXY` — Trust proxy for rate limiter IP detection behind reverse proxy. `false` to disable; `1` (default) for one proxy; `2` for two proxies, etc.
 - `RAPIDAPI_KEY`, `JUDGE0_API_HOST`, `JUDGE0_API_URL` — only needed if the coding-assessment (Judge0) feature is re-enabled; MCQ assessments do not require them
 
 ### 3. Database Setup
@@ -142,6 +144,8 @@ npx prisma dev --detach
 
 **Option B: Existing PostgreSQL (e.g. Supabase)**
 Update `DATABASE_URL` in `.env`. Supabase projects require `certs/supabase-ca.crt` — `config/prisma.js` enforces TLS with CA verification (verify-full). Download the certificate from Supabase Dashboard > Project Settings > Database > SSL Configuration and place it at `certs/supabase-ca.crt`.
+
+**Important**: `DATABASE_SSL=false` is ONLY for a local Postgres WITHOUT TLS. For Supabase, leave `DATABASE_SSL` UNSET so TLS with the CA certificate is used (set `DATABASE_SSL_CA_PATH` if your CA cert is not at `certs/supabase-ca.crt`).
 
 ### 4. Generate Prisma Client & Push Schema
 
@@ -170,19 +174,64 @@ node server.js
 
 Server runs on `http://localhost:5000` with health check at `/health`.
 
+### 7. Run Verification Scripts
+
+```bash
+npm run verify:flow        # Full E2E: auth, assessments, retake gate, admin review
+npm run verify:eligibility # Job matching, eligibility labels, cross-candidate comparison
+```
+
+> **Note**: The dev and production databases MUST be different. Never run verification scripts against a production database — they create/destroy test data.
+
+---
+
+## Local Setup (Quick Start)
+
+```bash
+# 1. Install dependencies
+npm install
+
+# 2. Configure environment
+cp .env.example .env
+# Edit .env with your values (see "Environment Configuration" above)
+
+# 3. Database: check migration status, then migrate
+npx prisma migrate status
+npx prisma migrate dev    # Creates and applies new migrations
+
+# 4. Seed data (order matters!)
+npm run prisma:seed            # Skill master data (idempotent)
+npm run prisma:seed:questions  # MCQ question bank (idempotent)
+npm run seed:admin             # Admin user (requires ADMIN_EMAIL / ADMIN_PASSWORD in .env)
+
+# 5. Start server
+npm start
+
+# 6. Run verification
+npm run verify:flow
+npm run verify:eligibility
+```
+
+> ⚠️ **Important**: The development and production databases MUST be separate. Verification scripts create and destroy test data — never point them at a production database.
+
 ## API Endpoints
 
 ### Auth
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | POST | `/api/v1/auth/register` | User registration (creates Profile + BasicInfo + PrivacyConsent) |
-| POST | `/api/v1/auth/login` | User login (JWT, 1h) |
+| POST | `/api/v1/auth/login` | User login (JWT, expiry from `JWT_EXPIRES_IN`, default 7d). Returns token with `tv` (tokenVersion). |
+| GET | `/api/v1/auth/me` | Get current user + profile summary + profile completion % (requires profile) |
+| POST | `/api/v1/auth/change-password` | Change password (requires current password). Rotates tokenVersion, returns new token. Rate limited (authLimiter). |
+| POST | `/api/v1/auth/logout-all` | Revokes all tokens by incrementing tokenVersion. |
+
+**Token revocation**: Password change, logout-all, or admin suspend increments `User.tokenVersion`; all existing tokens become invalid immediately. JWT payload includes `tv` (tokenVersion) and `id`. Expiry via `JWT_EXPIRES_IN` (default `7d`).
 
 ### Profile (Candidate — requires profile)
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/v1/profile/me` | Get full profile |
-| GET | `/api/v1/profile/me/dashboard` | Aggregated dashboard (profile completion, claims, roadmaps) |
+| GET | `/api/v1/profile/me/dashboard` | Aggregated dashboard (profile completion, claims, roadmaps). Returns `skillClaims` array with `{ skillId, skillName, selfRatedLevel, verifiedLevel, state: 'claimed' | 'verified' }`. |
 | PATCH | `/api/v1/profile/me/basic-info` | Update basic info |
 | PATCH | `/api/v1/profile/me/photo-headline` | Update photo & headline |
 | PATCH | `/api/v1/profile/me/address` | Update address |
@@ -190,7 +239,7 @@ Server runs on `http://localhost:5000` with health check at `/health`.
 | PATCH | `/api/v1/profile/me/salary-expectation` | Update salary expectation |
 | PATCH | `/api/v1/profile/me/availability` | Update availability |
 | PATCH | `/api/v1/profile/me/privacy-consent` | Update privacy consent |
-| GET | `/api/v1/profile/me/job-matches` | All open jobs ranked by eligibility |
+| GET | `/api/v1/profile/me/job-matches` | All open jobs ranked by eligibility. Returns per-job: `jobId`, `title`, `companyName`, `eligibilityScore`, `isEligible`, `eligibilityLabel` ('eligible' | 'partially-eligible' | 'skill-gap'). |
 | GET | `/api/v1/profile/me/applications` | List my applications |
 | PATCH | `/api/v1/profile/me/applications/:id/withdraw` | Withdraw an application |
 
@@ -223,12 +272,18 @@ Repeatable sections under `/api/v1/profile/<section>` with the same CRUD shape:
 ### Assessments (MCQ — Candidate, requires profile + claimed skill)
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/v1/assessments/start` | Start a session for a claimed skill — 10 random MCQs at the difficulty derived from the claimed level; expires in 1h; one IN_PROGRESS session per skill |
-| GET | `/api/v1/assessments/:sessionId/questions` | Get answered answers for an active session |
-| POST | `/api/v1/assessments/:sessionId/answers` | Submit/overwrite one answer `{questionId, selectedOptionIndex}` (correctness is not revealed per answer) |
-| POST | `/api/v1/assessments/:sessionId/complete` | Complete session — score = correct/answered × 100; passing updates `SkillClaim.verifiedScore` |
+| POST | `/api/v1/assessments/start` | Start a session for a claimed skill — 10 random MCQs at the difficulty derived from the claimed level; expires in 1h; one IN_PROGRESS session per skill. Returns questions with `position` (0–9). **Retake gate**: if a COMPLETED session exists for the same (skillId, targetLevel), an APPROVED, unconsumed RetakeRequest is required; otherwise returns 403. |
+| GET | `/api/v1/assessments/:sessionId/questions` | Get session questions ordered by position, with any submitted answers. Returns `{ sessionId, expiresAt, questions: [{id, promptText, options, difficulty, position}], answers: [{questionId, selectedOptionIndex}] }`. Never returns `correctOptionIndex` or `isCorrect`. |
+| POST | `/api/v1/assessments/:sessionId/answers` | Submit/overwrite one answer `{questionId, selectedOptionIndex}`. Validates the question belongs to this session (422 if not). Correctness is not revealed per answer. |
+| POST | `/api/v1/assessments/:sessionId/complete` | Complete session — score = correct among bound questions / total bound questions × 100; unanswered = wrong. Atomic completion prevents double-complete (409). Passing updates `SkillClaim.verifiedScore` (only when passed, never reset on fail). Response includes `totalQuestions`. |
+| POST | `/api/v1/assessments/retake-requests` | Create a retake request for a COMPLETED session owned by the caller. Body: `{ sessionId, reasonType: 'SYSTEM_FAILURE'|'OTHER_VALID_REASON', reason (20–1000 chars), evidenceNote? (max 1000) }`. Rate limited (5/hour). One PENDING request per (profileId, skillId) allowed (409). |
+| GET | `/api/v1/assessments/retake-requests` | List caller's own retake requests with status and review details. |
 
 Pass thresholds by claimed level: level 1–2 → 70%, level 3 → 80%, level 4 → 85%, level 5 → 90%.
+
+Question bank integrity: correct option positions are balanced at seed time (utils/questionBalance.js) so each index appears ~25% across non-pinned questions. Pinned questions ("all of the above", "none of the above", "both A and B") are never rebalanced. Run `npm run questions:check` to verify.
+
+Retake gate: a candidate may retake an assessment for a given level ONLY if they have an APPROVED, unconsumed RetakeRequest for that (skillId, targetLevel). After approval, the request is consumed atomically when the new session is created. Level upgrades (higher targetLevel than any prior COMPLETED session) are allowed without a retake request.
 
 ### Interview Experiences (crowd-sourced board — authenticated)
 | Method | Endpoint | Description |
@@ -252,8 +307,10 @@ Pass thresholds by claimed level: level 1–2 → 70%, level 3 → 80%, level 4 
 |--------|----------|-------------|
 | GET | `/api/v1/jobs` | List open jobs (filters: search, employmentType, experienceLevel, location, isRemote) |
 | GET | `/api/v1/jobs/:id` | Get single open job |
-| GET | `/api/v1/jobs/:id/eligibility` | My eligibility for a specific job |
+| GET | `/api/v1/jobs/:id/eligibility` | My eligibility for a specific job. Returns per-skill: `minimumLevel`, `isRequired`, `selfRatedLevel`, `verifiedLevel`, `gap`, `status` ('verified-match' | 'below-level' | 'unverified' | 'not-claimed'), plus `eligibilityScore`, `isEligible`, `eligibilityLabel`. |
 | POST | `/api/v1/jobs/:id/apply` | Apply to an open job (coverNote optional) |
+
+**Verified-only eligibility:** Only VERIFIED skills count. A skill matches only when `verifiedLevel !== null && verifiedLevel >= minimumLevel`. Self-rated level is shown but NOT used for eligibility. `eligibilityLabel`: 'eligible' (all required matched), 'partially-eligible' (score ≥ 50), 'skill-gap' (score < 50).
 
 ### Admin (requires ADMIN role)
 | Method | Endpoint | Description |
@@ -282,6 +339,8 @@ Pass thresholds by claimed level: level 1–2 → 70%, level 3 → 80%, level 4 
 | POST | `/api/v1/admin/roadmap-templates/:templateId/steps` | Add step |
 | PATCH | `/api/v1/admin/roadmap-templates/:templateId/steps/:id` | Update step |
 | DELETE | `/api/v1/admin/roadmap-templates/:templateId/steps/:id` | Remove step |
+| GET | `/api/v1/admin/retake-requests` | Paginated list of retake requests. Query: `status` (PENDING|APPROVED|REJECTED), `page` (default 1), `limit` (default 20, max 50). Returns `{ requests, pagination }`. |
+| PATCH | `/api/v1/admin/retake-requests/:id` | Approve or reject a PENDING retake request. Body: `{ status: 'APPROVED'|'REJECTED', reviewNote? }`. Stamps `reviewedByUserId` and `reviewedAt`. 409 if not PENDING. |
 
 ## Scripts
 
@@ -316,7 +375,7 @@ See `docs/Decisions.md` for the full decision log and `docs/Architecture.md` for
 - **Prisma 7** requires the driver adapter — configured via `@prisma/adapter-pg` in `config/prisma.js`
 - **TLS**: DB connections verify against `certs/supabase-ca.crt` (Supabase CA). The cert comes from the Supabase Dashboard (Project Settings > Database > SSL Configuration), not from any public URL
 - **Encryption**: Sensitive data is encrypted at the application layer before storage (AES-256-GCM, versioned payload `v1:<iv>:<tag>:<ciphertext>`)
-- **Rate limiting**: global 300 req/15min, auth endpoints 10 req/15min; `trust proxy = 1` assumes exactly one reverse proxy — remove/adjust `app.set('trust proxy', 1)` when deployed without one
+- **Rate limiting**: global 300 req/15min, auth endpoints 10 req/15min; `trust proxy` configured via `TRUST_PROXY` env var (`1` default, `false` to disable) — adjust for your reverse proxy setup
 - **Profile sections** use cascade delete with Profile as aggregate root
 - **Judge0 (coding assessments)** is paused: `services/judge0Service.js` is not wired into any route; MCQ assessments are the live engine
 - **Question bank**: Wave 1 skills (JavaScript, Python, Java, C++, SQL) are authored under `prisma/questions/`; new skills require both a `Skill` row (via `prisma/seed`) and a question set before assessments work for them

@@ -61,6 +61,17 @@ const loginValidation = [
     .isString(),
 ];
 
+const changePasswordValidation = [
+  body('currentPassword')
+    .notEmpty().withMessage('Current password is required')
+    .isString(),
+  body('newPassword')
+    .notEmpty().withMessage('New password is required')
+    .isString()
+    .isLength({ min: 8, max: 72 }).withMessage('Password must be between 8 and 72 characters')
+    .custom(hasLetterAndNumber).withMessage('Password must contain at least one letter and one number'),
+];
+
 function handleValidationErrors(req, res, next) {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -75,4 +86,9 @@ function handleValidationErrors(req, res, next) {
   next();
 }
 
-module.exports = { registerValidation, loginValidation, handleValidationErrors };
+module.exports = {
+  registerValidation,
+  loginValidation,
+  changePasswordValidation,
+  handleValidationErrors,
+};

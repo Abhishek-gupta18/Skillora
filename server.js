@@ -20,7 +20,13 @@ const assessmentRoutes = require('./routes/assessmentRoutes');
 
 const app = express();
 
-app.set('trust proxy', 1); // required for rate-limiter to see real client IP behind Render/Railway/Nginx reverse proxy
+const trustProxy = process.env.TRUST_PROXY;
+if (trustProxy === 'false' || trustProxy === '') {
+  app.set('trust proxy', false);
+} else {
+  const num = parseInt(trustProxy, 10);
+  app.set('trust proxy', isNaN(num) ? 1 : num);
+}
 
 app.use(helmet());
 
@@ -31,7 +37,7 @@ app.use(cors({
 
 app.use(globalLimiter);
 
-app.use(express.json({ limit: '10kb' })); // typical JSON API payloads are small; file uploads use separate route/limit later
+app.use(express.json({ limit: '10kb' }));
 
 app.get('/health', (req, res) => {
   res.json({

@@ -16,4 +16,12 @@ const authLimiter = rateLimit({
   message: { success: false, message: 'Too many authentication attempts, please try again later' },
 });
 
-module.exports = { globalLimiter, authLimiter };
+const retakeRequestLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many retake requests, please try again later' },
+});
+
+module.exports = { globalLimiter, authLimiter, retakeRequestLimiter };

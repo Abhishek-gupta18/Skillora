@@ -1,3 +1,4 @@
+require('dotenv').config();
 const { hashPassword } = require('../utils/password');
 const { prisma } = require('../config/prisma');
 
@@ -36,6 +37,33 @@ async function main() {
     console.error(
       'Error: ADMIN_EMAIL and ADMIN_PASSWORD must be set in environment variables.'
     );
+    process.exit(1);
+  }
+
+  // Password validation (G0.2)
+  const denylist = ['AdminPass123', 'Password123', 'admin123', 'ChangeMe123!'];
+  if (adminPassword.length < 12) {
+    console.error('Error: ADMIN_PASSWORD must be at least 12 characters long.');
+    process.exit(1);
+  }
+  if (!/[A-Za-z]/.test(adminPassword)) {
+    console.error('Error: ADMIN_PASSWORD must contain at least one letter.');
+    process.exit(1);
+  }
+  if (!/\d/.test(adminPassword)) {
+    console.error('Error: ADMIN_PASSWORD must contain at least one digit.');
+    process.exit(1);
+  }
+  if (!/[^A-Za-z0-9]/.test(adminPassword)) {
+    console.error('Error: ADMIN_PASSWORD must contain at least one symbol (non-alphanumeric).');
+    process.exit(1);
+  }
+  if (denylist.includes(adminPassword)) {
+    console.error('Error: ADMIN_PASSWORD is in the denylist (common weak passwords).');
+    process.exit(1);
+  }
+  if (process.env.NODE_ENV === 'production' && adminEmail.endsWith('@example.com')) {
+    console.error('Error: @example.com emails are not allowed in production.');
     process.exit(1);
   }
 

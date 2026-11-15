@@ -1,3 +1,5 @@
+const ASSESSMENT_QUESTION_COUNT = 10;
+
 function getPassThresholdForLevel(level) {
   if (!Number.isInteger(level) || level < 1 || level > 5) {
     throw new Error('Level must be an integer between 1 and 5');
@@ -18,6 +20,7 @@ function getDifficultyForLevel(level) {
 }
 
 module.exports = {
+  ASSESSMENT_QUESTION_COUNT,
   getPassThresholdForLevel,
   getDifficultyForLevel,
 };

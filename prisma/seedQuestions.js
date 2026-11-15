@@ -1,10 +1,44 @@
+require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
 const { prisma } = require('../config/prisma');
+const { balanceCorrectPositions, getDistribution, checkDistribution } = require('../utils/questionBalance');
 
 const QUESTIONS_DIR = path.join(__dirname, 'questions');
 
+function runCheckOnly() {
+  const files = fs.readdirSync(QUESTIONS_DIR).filter((f) => f.endsWith('.js'));
+
+  let allPassed = true;
+
+  for (const file of files) {
+    const { skill, difficulty, questions } = require(path.join(QUESTIONS_DIR, file));
+
+    const balancedQuestions = balanceCorrectPositions(questions, file);
+    const dist = getDistribution(balancedQuestions);
+    console.log(`File ${file}: correct index distribution after balancing:`, dist);
+
+    if (!checkDistribution(balancedQuestions)) {
+      console.error(`File ${file}: FAILED distribution check — some index exceeds 40% of non-pinned questions.`);
+      allPassed = false;
+    }
+  }
+
+  if (!allPassed) {
+    process.exit(1);
+  } else {
+    console.log('All files passed distribution check.');
+  }
+}
+
 async function main() {
+  const isCheckOnly = process.argv.includes('--check');
+
+  if (isCheckOnly) {
+    runCheckOnly();
+    return;
+  }
+
   const files = fs.readdirSync(QUESTIONS_DIR).filter((f) => f.endsWith('.js'));
 
   let created = 0;
@@ -25,7 +59,16 @@ async function main() {
       continue;
     }
 
-    for (const q of questions) {
+    const balancedQuestions = balanceCorrectPositions(questions, file);
+    const dist = getDistribution(balancedQuestions);
+    console.log(`File ${file}: correct index distribution after balancing:`, dist);
+
+    if (!checkDistribution(balancedQuestions)) {
+      console.error(`File ${file}: FAILED distribution check — some index exceeds 40% of non-pinned questions.`);
+      process.exit(1);
+    }
+
+    for (const q of balancedQuestions) {
       if (!q.prompt || !Array.isArray(q.options) || q.options.length < 2 || typeof q.correct !== 'number' || q.correct < 0 || q.correct >= q.options.length) {
         console.error(`File ${file}: malformed question "${q.prompt || '(missing prompt)'}" — skipped.`);
         continue;
@@ -60,4 +103,8 @@ main()
     console.error('Question seed failed:', e.message);
     process.exit(1);
   })
-  .finally(() => prisma.$disconnect());
+  .finally(() => {
+    if (!process.argv.includes('--check')) {
+      prisma.$disconnect();
+    }
+  });

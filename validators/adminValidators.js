@@ -1,4 +1,4 @@
-const { body, param, check } = require('express-validator');
+const { body, param, check, query } = require('express-validator');
 const { handleValidationErrors } = require('../validators/authValidators');
 
 /**
@@ -186,6 +186,25 @@ const addRequiredSkillValidation = [
     .isBoolean().withMessage('isRequired must be a boolean'),
 ];
 
+/**
+ * userListQueryValidation — GET /admin/users query params
+ */
+const userListQueryValidation = [
+  query('search').optional().trim().isLength({ max: 100 }).withMessage('Search term too long'),
+  query('role').optional().isIn(['CANDIDATE', 'ADMIN']).withMessage('Invalid role filter'),
+  query('status').optional().isIn(['ACTIVE', 'SUSPENDED']).withMessage('Invalid status filter'),
+  query('page').optional().isInt({ min: 1 }).withMessage('Page must be a positive integer'),
+  query('limit').optional().isInt({ min: 1, max: 50 }).withMessage('Limit must be between 1 and 50'),
+];
+
+/**
+ * userStatusUpdateValidation — PATCH /admin/users/:id/status
+ */
+const userStatusUpdateValidation = [
+  param('id').isString().notEmpty().withMessage('User ID is required'),
+  body('status').isIn(['ACTIVE', 'SUSPENDED']).withMessage('Status must be ACTIVE or SUSPENDED'),
+];
+
 module.exports = {
   createCompanyValidation,
   updateCompanyValidation,
@@ -193,5 +212,7 @@ module.exports = {
   updateJobPostingValidation,
   updateJobStatusValidation,
   addRequiredSkillValidation,
+  userListQueryValidation,
+  userStatusUpdateValidation,
   handleValidationErrors,
 };

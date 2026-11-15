@@ -28,7 +28,7 @@ async function getJobEligibility(req, res, next) {
 
     const candidateSkillClaims = await prisma.skillClaim.findMany({
       where: { profileId: req.profile.id },
-      select: { skillId: true, selfRatedLevel: true, verifiedScore: true },
+      select: { skillId: true, selfRatedLevel: true, verifiedLevel: true, verifiedScore: true },
     });
 
     const result = calculateEligibility(candidateSkillClaims, job.jobRequiredSkills);
@@ -71,11 +71,11 @@ async function getJobMatches(req, res, next) {
 
     const candidateSkillClaims = await prisma.skillClaim.findMany({
       where: { profileId: req.profile.id },
-      select: { skillId: true, selfRatedLevel: true, verifiedScore: true },
+      select: { skillId: true, selfRatedLevel: true, verifiedLevel: true, verifiedScore: true },
     });
 
     const results = jobs.map(job => {
-      const { eligibilityScore, isEligible } = calculateEligibility(
+      const { eligibilityScore, isEligible, eligibilityLabel } = calculateEligibility(
         candidateSkillClaims,
         job.jobRequiredSkills
       );
@@ -85,6 +85,7 @@ async function getJobMatches(req, res, next) {
         companyName: job.company.name,
         eligibilityScore,
         isEligible,
+        eligibilityLabel,
       };
     });
 

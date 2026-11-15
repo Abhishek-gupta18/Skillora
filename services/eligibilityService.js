@@ -2,14 +2,18 @@
  * calculateEligibility — pure function to compute a candidate's match
  * against a job's required skills.
  * 
- * NOTE: Currently uses SkillClaim.selfRatedLevel as the effective level
- * because the Assessment Engine is deferred (see Decisions.md). When the
- * Assessment Engine ships, this logic should be updated to prefer
- * verifiedScore over selfRatedLevel when a verified score exists.
+ * Effective level is the claim's verifiedLevel (null when unverified).
+ * Matched = verifiedLevel !== null && verifiedLevel >= minimumLevel.
  * 
- * @param {Array<{skillId: string, selfRatedLevel: number, verifiedScore: number|null}>} candidateSkillClaims
+ * @param {Array<{skillId: string, selfRatedLevel: number, verifiedLevel: number|null, verifiedScore: number|null}>} candidateSkillClaims
  * @param {Array<{skillId: string, skill: {name: string}, minimumLevel: number, isRequired: boolean}>} jobRequiredSkills
- * @returns {{eligibilityScore: number, isEligible: boolean, matchedSkills: Array, missingSkills: Array}}
+ * @returns {{
+ *   eligibilityScore: number,
+ *   isEligible: boolean,
+ *   matchedSkills: Array,
+ *   missingSkills: Array,
+ *   eligibilityLabel: string
+ * }}
  */
 function calculateEligibility(candidateSkillClaims, jobRequiredSkills) {
   const claimMap = new Map();
@@ -20,16 +24,30 @@ function calculateEligibility(candidateSkillClaims, jobRequiredSkills) {
   const results = [];
   for (const req of jobRequiredSkills) {
     const claim = claimMap.get(req.skillId);
-    const effectiveLevel = claim ? claim.selfRatedLevel : null;
-    const matched = claim !== undefined && effectiveLevel >= req.minimumLevel;
+    const verifiedLevel = claim ? claim.verifiedLevel : null;
+    const matched = verifiedLevel !== null && verifiedLevel >= req.minimumLevel;
+
+    let status;
+    if (!claim) {
+      status = 'not-claimed';
+    } else if (verifiedLevel === null) {
+      status = 'unverified';
+    } else if (matched) {
+      status = 'verified-match';
+    } else {
+      status = 'below-level';
+    }
 
     results.push({
       skillId: req.skillId,
       skillName: req.skill.name,
       minimumLevel: req.minimumLevel,
       isRequired: req.isRequired,
-      candidateLevel: effectiveLevel,
+      selfRatedLevel: claim ? claim.selfRatedLevel : null,
+      verifiedLevel,
+      gap: Math.max(0, req.minimumLevel - (verifiedLevel ?? 0)),
       matched,
+      status,
     });
   }
 
@@ -44,17 +62,27 @@ function calculateEligibility(candidateSkillClaims, jobRequiredSkills) {
   const matchedSkills = results.filter(e => e.matched);
   const missingSkills = results.filter(e => !e.matched);
 
+  let eligibilityLabel;
+  if (isEligible) {
+    eligibilityLabel = 'eligible';
+  } else if (eligibilityScore >= 50) {
+    eligibilityLabel = 'partially-eligible';
+  } else {
+    eligibilityLabel = 'skill-gap';
+  }
+
   return {
     eligibilityScore,
     isEligible,
     matchedSkills,
     missingSkills,
+    eligibilityLabel,
   };
 }
 
 function rankJobMatches(candidateSkillClaims, jobs) {
   const results = jobs.map(job => {
-    const { eligibilityScore, isEligible } = calculateEligibility(
+    const { eligibilityScore, isEligible, eligibilityLabel } = calculateEligibility(
       candidateSkillClaims,
       job.jobRequiredSkills
     );
@@ -64,6 +92,7 @@ function rankJobMatches(candidateSkillClaims, jobs) {
       companyName: job.company.name,
       eligibilityScore,
       isEligible,
+      eligibilityLabel,
     };
   });
 

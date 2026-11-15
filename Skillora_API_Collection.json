@@ -17,6 +17,11 @@
 			"type": "string"
 		},
 		{
+			"key": "adminAuthToken",
+			"value": "",
+			"type": "string"
+		},
+		{
 			"key": "candidateEmail",
 			"value": "test.candidate@example.com",
 			"type": "string"
@@ -332,7 +337,334 @@
 			"response": []
 		},
 		{
-			"name": "9. POST /api/v1/resume (multipart) - Upload PDF file",
+			"name": "9. POST /api/v1/assessments/start - Start assessment session",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{authToken}}"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"skillId\": \"javascript\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/assessments/start",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "v1", "assessments", "start"]
+				}
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Assessment session started', function () {",
+							"    pm.expect(pm.response.code).to.equal(201);",
+							"    const json = pm.response.json();",
+							"    pm.expect(json.success).to.be.true;",
+							"    pm.expect(json.data.sessionId).to.exist;",
+							"    pm.expect(json.data.questions).to.be.an('array').with.length(10);",
+							"    pm.collectionVariables.set('sessionId', json.data.sessionId);",
+							"    console.log('Session started:', json.data.sessionId);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"response": []
+		},
+		{
+			"name": "10. GET /api/v1/assessments/:sessionId/questions - Get session questions and answers",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{authToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/assessments/{{sessionId}}/questions",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "v1", "assessments", "{{sessionId}}", "questions"]
+				}
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Session questions retrieved', function () {",
+							"    pm.expect(pm.response.code).to.equal(200);",
+							"    const json = pm.response.json();",
+							"    pm.expect(json.success).to.be.true;",
+							"    pm.expect(json.data.sessionId).to.equal(pm.collectionVariables.get('sessionId'));",
+							"    pm.expect(json.data.questions).to.be.an('array').with.length(10);",
+							"    pm.expect(json.data.questions[0]).to.have.property('position');",
+							"    console.log('Questions retrieved:', json.data.questions.length);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"response": []
+		},
+		{
+			"name": "11. POST /api/v1/assessments/:sessionId/answers - Submit answer",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{authToken}}"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"questionId\": \"{{questionId}}\",\n  \"selectedOptionIndex\": 0\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/assessments/{{sessionId}}/answers",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "v1", "assessments", "{{sessionId}}", "answers"]
+				}
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Answer submitted', function () {",
+							"    pm.expect(pm.response.code).to.equal(200);",
+							"    const json = pm.response.json();",
+							"    pm.expect(json.success).to.be.true;",
+							"    pm.expect(json.data.submitted).to.be.true;",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"response": []
+		},
+		{
+			"name": "12. POST /api/v1/assessments/:sessionId/complete - Complete assessment",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{authToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/assessments/{{sessionId}}/complete",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "v1", "assessments", "{{sessionId}}", "complete"]
+				}
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Assessment completed', function () {",
+							"    pm.expect(pm.response.code).to.equal(200);",
+							"    const json = pm.response.json();",
+							"    pm.expect(json.success).to.be.true;",
+							"    pm.expect(json.data.score).to.be.a('number');",
+							"    pm.expect(json.data.passed).to.be.a('boolean');",
+							"    pm.expect(json.data.totalQuestions).to.equal(10);",
+							"    console.log('Score:', json.data.score, 'Passed:', json.data.passed);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"response": []
+		},
+		{
+			"name": "13. POST /api/v1/assessments/retake-requests - Create retake request",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{authToken}}"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"sessionId\": \"{{sessionId}}\",\n  \"reasonType\": \"SYSTEM_FAILURE\",\n  \"reason\": \"System crashed during the assessment and I lost my progress.\",\n  \"evidenceNote\": \"Screenshot attached via support ticket #12345\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/assessments/retake-requests",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "v1", "assessments", "retake-requests"]
+				}
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Retake request created', function () {",
+							"    pm.expect(pm.response.code).to.equal(201);",
+							"    const json = pm.response.json();",
+							"    pm.expect(json.success).to.be.true;",
+							"    pm.expect(json.data.id).to.exist;",
+							"    pm.expect(json.data.status).to.equal('PENDING');",
+							"    pm.collectionVariables.set('retakeRequestId', json.data.id);",
+							"    console.log('Retake request created:', json.data.id);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"response": []
+		},
+		{
+			"name": "14. GET /api/v1/assessments/retake-requests - List my retake requests",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{authToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/assessments/retake-requests",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "v1", "assessments", "retake-requests"]
+				}
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Retake requests listed', function () {",
+							"    pm.expect(pm.response.code).to.equal(200);",
+							"    const json = pm.response.json();",
+							"    pm.expect(json.success).to.be.true;",
+							"    pm.expect(json.data).to.be.an('array');",
+							"    console.log('Retake requests:', json.data.length);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"response": []
+		},
+		{
+			"name": "15. POST /api/v1/admin/retake-requests - Admin: list retake requests (paginated)",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{adminAuthToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/admin/retake-requests?status=PENDING&page=1&limit=20",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "v1", "admin", "retake-requests"],
+					"query": [
+						{ "key": "status", "value": "PENDING" },
+						{ "key": "page", "value": "1" },
+						{ "key": "limit", "value": "20" }
+					]
+				}
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Admin retake requests listed', function () {",
+							"    pm.expect(pm.response.code).to.equal(200);",
+							"    const json = pm.response.json();",
+							"    pm.expect(json.success).to.be.true;",
+							"    pm.expect(json.data.requests).to.be.an('array');",
+							"    pm.expect(json.data.pagination).to.exist;",
+							"    console.log('Admin retake requests:', json.data.requests.length);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"response": []
+		},
+		{
+			"name": "16. PATCH /api/v1/admin/retake-requests/:id - Admin: approve retake request",
+			"request": {
+				"method": "PATCH",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{adminAuthToken}}"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"status\": \"APPROVED\",\n  \"reviewNote\": \"Approved due to confirmed system outage.\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/admin/retake-requests/{{retakeRequestId}}",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "v1", "admin", "retake-requests", "{{retakeRequestId}}"]
+				}
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Retake request approved', function () {",
+							"    pm.expect(pm.response.code).to.equal(200);",
+							"    const json = pm.response.json();",
+							"    pm.expect(json.success).to.be.true;",
+							"    pm.expect(json.data.status).to.equal('APPROVED');",
+							"    pm.expect(json.data.reviewedByUserId).to.exist;",
+							"    pm.expect(json.data.reviewedAt).to.exist;",
+							"    console.log('Retake request approved:', json.data.id);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"response": []
+		},
+		{
+			"name": "17. POST /api/v1/resume (multipart) - Upload PDF file",
 			"request": {
 				"method": "POST",
 				"header": [
@@ -403,6 +735,94 @@
 							"    pm.expect(pm.response.headers.get('Content-Disposition')).to.include('attachment');",
 							"    pm.expect(pm.response.headers.get('Content-Length')).to.exist;",
 							"    console.log('File size:', pm.response.headers.get('Content-Length'), 'bytes');",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"response": []
+		},
+		{
+			"name": "11. GET /api/v1/jobs/:id/eligibility - Check job eligibility",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{authToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/jobs/{{jobId}}/eligibility",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "v1", "jobs", "{{jobId}}", "eligibility"]
+				}
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Job eligibility retrieved', function () {",
+							"    pm.expect(pm.response.code).to.equal(200);",
+							"    const json = pm.response.json();",
+							"    pm.expect(json.success).to.be.true;",
+							"    pm.expect(json.data.eligibilityScore).to.be.a('number');",
+							"    pm.expect(json.data.isEligible).to.be.a('boolean');",
+							"    pm.expect(json.data.eligibilityLabel).to.be.a('string');",
+							"    pm.expect(json.data.matchedSkills).to.be.an('array');",
+							"    pm.expect(json.data.missingSkills).to.be.an('array');",
+							"    if (json.data.matchedSkills.length > 0) {",
+							"        const skill = json.data.matchedSkills[0];",
+							"        pm.expect(skill.verifiedLevel).to.exist;",
+							"        pm.expect(skill.status).to.be.oneOf(['verified-match', 'below-level', 'unverified', 'not-claimed']);",
+							"        pm.expect(skill.gap).to.be.a('number');",
+							"    }",
+							"    console.log('Eligibility:', json.data.eligibilityScore, 'Label:', json.data.eligibilityLabel);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"response": []
+		},
+		{
+			"name": "12. GET /api/v1/profile/me/dashboard - Get dashboard",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{authToken}}"
+					}
+				],
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/profile/me/dashboard",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "v1", "profile", "me", "dashboard"]
+				}
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Dashboard retrieved', function () {",
+							"    pm.expect(pm.response.code).to.equal(200);",
+							"    const json = pm.response.json();",
+							"    pm.expect(json.success).to.be.true;",
+							"    pm.expect(json.data.skillClaims).to.be.an('array');",
+							"    if (json.data.skillClaims.length > 0) {",
+							"        const claim = json.data.skillClaims[0];",
+							"        pm.expect(claim).to.have.property('skillId');",
+							"        pm.expect(claim).to.have.property('skillName');",
+							"        pm.expect(claim).to.have.property('selfRatedLevel');",
+							"        pm.expect(claim).to.have.property('verifiedLevel');",
+							"        pm.expect(claim.state).to.be.oneOf(['claimed', 'verified']);",
+							"    }",
+							"    console.log('Dashboard skill claims:', json.data.skillClaims.length);",
 							"});"
 						],
 						"type": "text/javascript"
