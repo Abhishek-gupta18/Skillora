@@ -8,6 +8,7 @@ import {
     useLayoutEffect,
 } from "react"
 import type { CSSProperties } from "react"
+import { devPreview } from "./dev"
 const useIsStaticRenderer = () => false
 
 // User request: fully restore all landing content while keeping named section functions and controls, with responsive/accessibility fixes and premium visual polish.
@@ -77,6 +78,7 @@ interface MyComponentProps {
     hairline: string
     signupUrl: string
     signinUrl: string
+    onAuth?: (kind: "signup" | "signin") => void
     stats?: MetricItem[]
     features?: FeatureItem[]
     jobs?: JobItem[]
@@ -170,9 +172,9 @@ const defaultFooter: FooterGroup[] = [
     {
         title: "Product",
         links: [
-            { label: "Dashboard", url: "" },
+            { label: "Dashboard", url: "#/dashboard" },
             { label: "Jobs", url: "#jobs" },
-            { label: "Tests", url: "" },
+            { label: "Tests", url: "#/dashboard/assessments" },
             { label: "Preparation", url: "#how" },
             { label: "Interview Intelligence", url: "#interview" },
         ],
@@ -382,6 +384,7 @@ export default function ProventaLanding(props: MyComponentProps) {
         hairline,
         signupUrl,
         signinUrl,
+        onAuth,
         stats = defaultStats,
         features = defaultFeatures,
         community = defaultCommunity,
@@ -523,6 +526,10 @@ export default function ProventaLanding(props: MyComponentProps) {
     }, [])
     const auth = useCallback(
         (kind: "signup" | "signin") => {
+            if (onAuth) {
+                onAuth(kind)
+                return
+            }
             const href = kind === "signup" ? signupUrl : signinUrl
             if (!href)
                 return openDialog(
@@ -531,7 +538,7 @@ export default function ProventaLanding(props: MyComponentProps) {
             if (typeof window !== "undefined")
                 window.open(href, "_blank", "noopener,noreferrer")
         },
-        [signupUrl, signinUrl, openDialog]
+        [signupUrl, signinUrl, openDialog, onAuth]
     )
 
     useLayoutEffect(() => {
@@ -996,6 +1003,16 @@ function Navbar({
                         className="hideMobile"
                         style={{ display: "flex", gap: 8 }}
                     >
+                        {devPreview && (
+                            <Button
+                                shared={shared}
+                                label="Dashboard"
+                                primary={false}
+                                onClick={() => {
+                                    window.location.hash = "#/dashboard"
+                                }}
+                            />
+                        )}
                         <Button
                             shared={shared}
                             label="Sign In"
@@ -1073,6 +1090,16 @@ function Navbar({
                             className="mobileAuth"
                             style={{ gap: 8, marginTop: 8 }}
                         >
+                            {devPreview && (
+                                <Button
+                                    shared={shared}
+                                    label="Dashboard"
+                                    primary={false}
+                                    onClick={() => {
+                                        window.location.hash = "#/dashboard"
+                                    }}
+                                />
+                            )}
                             <Button
                                 shared={shared}
                                 label="Sign In"
@@ -2271,7 +2298,12 @@ function Footer({
                                         <button
                                             onClick={() => {
                                                 const url = l.url || ""
-                                                if (url.startsWith("#"))
+                                                if (url.startsWith("#/")) {
+                                                    if (typeof window !== "undefined")
+                                                        window.location.hash = url
+                                                } else if (
+                                                    url.startsWith("#")
+                                                )
                                                     scrollToSection(
                                                         url.replace("#", "")
                                                     )

@@ -3,6 +3,7 @@ const { asyncHandler } = require('../middleware/errorHandler');
 const { getPassThresholdForLevel, getDifficultyForLevel, ASSESSMENT_QUESTION_COUNT } = require('../utils/skillLevelBands');
 const { matchedData } = require('express-validator');
 const { isRetakeRequired, countRetakeEligibleSessions } = require('../utils/retakeGate');
+const { notifyForAssessmentResult } = require('../services/notificationService');
 
 async function startSession(req, res, next) {
   try {
@@ -433,6 +434,21 @@ async function completeSession(req, res, next) {
         totalQuestions,
       },
     });
+
+    // Best-effort notification to candidate (after response sent)
+    try {
+      const skill = await prisma.skill.findUnique({
+        where: { id: session.skillId },
+        select: { name: true },
+      });
+      if (skill) {
+        notifyForAssessmentResult(prisma, session.profileId, {
+          passed,
+          score,
+          skillName: skill.name,
+        }).catch(() => {}); // best-effort
+      }
+    } catch (_) {}
   } catch (err) {
     next(err);
   }

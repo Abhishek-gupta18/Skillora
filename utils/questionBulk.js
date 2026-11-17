@@ -1,13 +1,11 @@
 const { balanceCorrectPositions, getDistribution } = require('./questionBalance');
 
 /**
- * Prepare and validate bulk questions for insertion.
- * - Trims promptText
- * - Rejects empty options
- * - De-duplicates identical promptText within the batch (reports skipped)
- * - Balances correct positions
- * - Asserts correct option TEXT is unchanged and no option is undefined/null/empty
- * Returns: { questions: balancedQuestions[], skipped: { promptText: string, reason: string }[], distribution: object }
+ * Validate, de-duplicate and balance a batch of admin-supplied questions.
+ * Input items:  { promptText, options, correctOptionIndex }
+ * Returns:      { questions: [{ promptText, options, correctOptionIndex }], skipped: [{ promptText, reason }], distribution }
+ * Throws if the batch is empty/too large, if nothing valid remains, or if balancing ever changes
+ * the TEXT of a correct answer (data-integrity guard).
  */
 function prepareBulkQuestions(questions, seedString) {
   if (!Array.isArray(questions) || questions.length === 0) {
@@ -18,111 +16,59 @@ function prepareBulkQuestions(questions, seedString) {
   }
 
   const seenPrompts = new Set();
-  const toBalance = [];
+  const valid = [];
   const skipped = [];
 
-  for (let i = 0; i < questions.length; i++) {
-    const q = questions[i];
-    const prefix = `questions[${i}]`;
+  for (const q of questions) {
+    const rawPrompt = q && typeof q.promptText === 'string' ? q.promptText : '';
+    const promptText = rawPrompt.trim();
+    const skip = (reason) => skipped.push({ promptText, reason });
 
-    // Validate required fields
-    if (!q.promptText || typeof q.promptText !== 'string' || q.promptText.trim().length === 0) {
-      skipped.push({ promptText: q.promptText ?? '', reason: 'promptText is required' });
-      continue;
-    }
-    const trimmedPrompt = q.promptText.trim();
-
-    // Check in-batch duplicate
-    if (seenPrompts.has(trimmedPrompt)) {
-      skipped.push({ promptText: trimmedPrompt, reason: 'duplicate promptText in batch' });
-      continue;
-    }
-
-    // Validate options
+    if (!promptText) { skip('promptText is required'); continue; }
+    if (seenPrompts.has(promptText)) { skip('duplicate promptText in batch'); continue; }
     if (!Array.isArray(q.options) || q.options.length < 2 || q.options.length > 6) {
-      skipped.push({ promptText: trimmedPrompt, reason: 'options must be 2-6 strings' });
-      continue;
+      skip('options must be 2-6 strings'); continue;
     }
+
+    let badOption = null;
     for (let j = 0; j < q.options.length; j++) {
       const opt = q.options[j];
-      if (opt === undefined || opt === null || typeof opt !== 'string' || opt.trim().length === 0) {
-        skipped.push({ promptText: trimmedPrompt, reason: `options[${j}] must be a non-empty string` });
-        break;
-      }
-      if (opt.length > 300) {
-        skipped.push({ promptText: trimmedPrompt, reason: `options[${j}] exceeds 300 characters` });
-        break;
-      }
+      if (typeof opt !== 'string' || opt.trim().length === 0) { badOption = `options[${j}] must be a non-empty string`; break; }
+      if (opt.trim().length > 300) { badOption = `options[${j}] exceeds 300 characters`; break; }
     }
-    if (skipped.length > 0 && skipped[skipped.length - 1].promptText === trimmedPrompt) {
-      continue;
+    if (badOption) { skip(badOption); continue; }
+
+    if (!Number.isInteger(q.correctOptionIndex) || q.correctOptionIndex < 0 || q.correctOptionIndex >= q.options.length) {
+      skip('correctOptionIndex out of bounds'); continue;
     }
 
-    // Validate correctOptionIndex
-    if (typeof q.correctOptionIndex !== 'number' || q.correctOptionIndex < 0 || q.correctOptionIndex >= q.options.length) {
-      skipped.push({ promptText: trimmedPrompt, reason: 'correctOptionIndex out of bounds' });
-      continue;
-    }
-
-    // Store original correct option text for assertion after balancing
-    const originalCorrectText = q.options[q.correctOptionIndex];
-
-    toBalance.push({
-      promptText: trimmedPrompt,
-      options: q.options.map(o => o.trim()),
-      correctOptionIndex: q.correctOptionIndex,
-      _originalCorrectText: originalCorrectText,
-    });
-
-    seenPrompts.add(trimmedPrompt);
+    const options = q.options.map((o) => o.trim());
+    valid.push({ promptText, options, correctOptionIndex: q.correctOptionIndex, correctText: options[q.correctOptionIndex] });
+    seenPrompts.add(promptText);
   }
 
-  if (toBalance.length === 0) {
+  if (valid.length === 0) {
     throw new Error('No valid questions to insert after validation');
   }
 
-  // Balance correct positions
   const balanced = balanceCorrectPositions(
-    toBalance.map(q => ({
-      promptText: q.promptText,
-      options: q.options,
-      correct: q.correctOptionIndex,
-    })),
+    valid.map((v) => ({ promptText: v.promptText, options: v.options, correct: v.correctOptionIndex })),
     seedString
   );
 
-  // Map back to expected shape and assert correct option text unchanged
-  const balancedQuestions = [];
-  for (let i = 0; i < toBalance.length; i++) {
-    const original = toBalance[i];
-    const balanced = balanced[i];
-
-    // Assert correct option TEXT unchanged
-    const balancedCorrectText = balanced.options[balanced.correct];
-    if (balancedCorrectText !== original._originalCorrectText) {
-      throw new Error(`Correct answer text changed for question "${original.promptText}": expected "${original._originalCorrectText}", got "${balancedCorrectText}"`);
+  const result = valid.map((v, i) => {
+    const b = balanced[i];
+    if (!b || !Array.isArray(b.options) || b.options[b.correct] !== v.correctText) {
+      throw new Error(`Correct answer text changed during balancing for "${v.promptText}"`);
     }
-
-    // Assert no option is undefined/null/empty
-    for (const opt of balanced.options) {
-      if (opt === undefined || opt === null || opt === '') {
-        throw new Error(`Empty option found in balanced question "${balanced.promptText}"`);
-      }
+    if (b.options.length !== v.options.length || b.options.some((o) => typeof o !== 'string' || o.length === 0)) {
+      throw new Error(`Invalid options after balancing for "${v.promptText}"`);
     }
+    return { promptText: b.promptText, options: b.options, correctOptionIndex: b.correct };
+  });
 
-    balancedQuestions.push({
-      promptText: balanced.promptText,
-      options: balanced.options,
-      correctOptionIndex: balanced.correct,
-    });
-  }
-
-  // Compute real distribution counts
-  const distribution = getDistribution(
-    balancedQuestions.map(q => ({ options: q.options, correct: q.correctOptionIndex }))
-  );
-
-  return { questions: balancedQuestions, skipped, distribution };
+  const distribution = getDistribution(result.map((r) => ({ options: r.options, correct: r.correctOptionIndex })));
+  return { questions: result, skipped, distribution };
 }
 
 module.exports = { prepareBulkQuestions };

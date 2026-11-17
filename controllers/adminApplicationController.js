@@ -1,6 +1,7 @@
 const { prisma } = require('../config/prisma');
 const { asyncHandler } = require('../middleware/errorHandler');
 const { streamResumeToResponse } = require('./resumeController');
+const { notifyForApplicationStatus } = require('../services/notificationService');
 
 async function listJobApplicants(req, res, next) {
   try {
@@ -49,6 +50,19 @@ async function updateApplicationStatus(req, res, next) {
 
     const application = await prisma.application.findUnique({
       where: { id },
+      include: {
+        profile: {
+          include: {
+            user: { select: { id: true } },
+            basicInfo: { select: { name: true } },
+          },
+        },
+        jobPosting: {
+          include: {
+            company: { select: { name: true } },
+          },
+        },
+      },
     });
 
     if (!application) {
@@ -69,6 +83,14 @@ async function updateApplicationStatus(req, res, next) {
         statusUpdatedAt: new Date(),
       },
     });
+
+    if (application.profile?.user) {
+      notifyForApplicationStatus(prisma, application.profile.user.id, {
+        status: req.body.status,
+        jobTitle: application.jobPosting?.title,
+        companyName: application.jobPosting?.company?.name,
+      }).catch(() => {});
+    }
 
     return res.status(200).json({ success: true, data: updated });
   } catch (err) {

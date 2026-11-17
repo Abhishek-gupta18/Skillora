@@ -4,6 +4,7 @@ const { matchedData } = require('express-validator');
 const { balanceCorrectPositions, checkDistribution, getDistribution } = require('../utils/questionBalance');
 const { ASSESSMENT_QUESTION_COUNT } = require('../utils/skillLevelBands');
 const { prepareBulkQuestions } = require('../utils/questionBulk');
+const { notifyForRetakeDecision } = require('../services/notificationService');
 
 /**
  * ==========================================
@@ -564,6 +565,14 @@ async function updateRetakeRequest(req, res, next) {
         updatedAt: true,
       },
     });
+
+    // Best-effort notification to candidate (after successful write)
+    if (updated) {
+      notifyForRetakeDecision(prisma, updated.profileId, {
+        status: updated.status,
+        reviewNote: updated.reviewNote,
+      }).catch(() => {}); // best-effort
+    }
 
     return res.status(200).json({ success: true, data: updated });
   } catch (err) {

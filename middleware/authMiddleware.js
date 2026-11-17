@@ -1,6 +1,7 @@
 const { prisma } = require('../config/prisma');
 const { verifyToken } = require('../utils/jwt');
 const { evaluateAuthState } = require('../utils/authState');
+const { attachProfile } = require('./profileMiddleware');
 
 async function authenticate(req, res, next) {
   const authHeader = req.headers.authorization;
@@ -34,4 +35,4 @@ async function authenticate(req, res, next) {
   next();
 }
 
-module.exports = { authenticate };
+module.exports = { authenticate, attachProfile };

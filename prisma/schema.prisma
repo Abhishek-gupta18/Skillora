@@ -7,15 +7,17 @@ datasource db {
 }
 
 model User {
-  id              String     @id @default(cuid())
-  email           String     @unique
+  id              String           @id @default(cuid())
+  email           String           @unique
   passwordHash    String
-  role            UserRole   @default(CANDIDATE)
-  isEmailVerified Boolean    @default(false)
-  status          UserStatus @default(ACTIVE)
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
+  role            UserRole         @default(CANDIDATE)
+  isEmailVerified Boolean          @default(false)
+  status          UserStatus       @default(ACTIVE)
+  tokenVersion    Int              @default(0)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
   profile         Profile?
+  notifications   Notification[]
 
   @@index([status])
 }
@@ -369,6 +371,21 @@ model RoadmapStepProgress {
 
   @@unique([roadmapAssignmentId, roadmapStepId])
   @@index([roadmapAssignmentId])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String           @db.VarChar(120)
+  body      String           @db.VarChar(500)
+  linkTo    String?          @db.VarChar(200)
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
 }
 
 model Question {
@@ -763,4 +780,12 @@ enum RoadmapAssignmentStatus {
   ACTIVE
   COMPLETED
   ABANDONED
+}
+
+enum NotificationType {
+  RETAKE_DECISION
+  ASSESSMENT_RESULT
+  APPLICATION_STATUS
+  ROADMAP
+  SYSTEM
 }
